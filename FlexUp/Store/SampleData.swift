@@ -130,6 +130,46 @@ enum SampleData {
         ]
     }
 
+    /// Squad feed fixtures, linked to seeded activities so every event with
+    /// a "Join" CTA opens a real activity.
+    static func socialEvents(activities: [Activity], from now: Date = .now) -> [SocialEvent] {
+        func ago(_ hours: Double) -> Date { now.addingTimeInterval(-hours * 3600) }
+        func activity(_ title: String) -> UUID? { activities.first { $0.title == title }?.id }
+
+        return [
+            SocialEvent(
+                author: "Aman", kind: .completed,
+                message: "Aman completed his first 10K.",
+                detail: "Join his next run.",
+                date: ago(3), activityID: activity("Sunrise 5K"), cheers: 4
+            ),
+            SocialEvent(
+                author: "Sarah", kind: .created,
+                message: "Sarah created a trail hike.",
+                detail: "8 km at Cedar Ridge. Moderate climb, great views.",
+                date: ago(7), activityID: activity("Trail hike"), cheers: 2
+            ),
+            SocialEvent(
+                author: "Maya", kind: .achievement,
+                message: "Maya unlocked One Week Strong.",
+                detail: "Seven days without missing.",
+                date: ago(21), cheers: 6
+            ),
+            SocialEvent(
+                author: "Jonas", kind: .created,
+                message: "Jonas is hosting 7-a-side football.",
+                detail: "Two spots left for Saturday.",
+                date: ago(27), activityID: activity("Saturday football"), cheers: 3
+            ),
+            SocialEvent(
+                author: "Priya", kind: .milestone,
+                message: "Your crew logged 18 workouts this week.",
+                detail: "Best week yet. Keep it rolling.",
+                date: ago(32), cheers: 8
+            ),
+        ]
+    }
+
     static let communities: [Community] = [
         Community(name: "Riverside Run Club", icon: "figure.run", members: 128, nextEvent: "Sunrise 5K · tomorrow"),
         Community(name: "Northside Football", icon: "soccerball", members: 54, nextEvent: "7-a-side · Saturday"),

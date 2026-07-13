@@ -17,6 +17,7 @@ final class AppStore {
     var communities: [Community] = []
     var friends: [Friend] = []
     var runs: [Run] = []
+    var socialEvents: [SocialEvent] = []
     var moodByDay: [String: String] = [:]
     var chats: [UUID: [ChatMessage]] = [:]
 
@@ -32,6 +33,7 @@ final class AppStore {
     init() {
         load()
         if activities.isEmpty { seedWorld() }
+        if socialEvents.isEmpty { socialEvents = SampleData.socialEvents(activities: activities) }
         mergeAchievementCatalog()
         refreshDiscoverFeed()
         rolloverMissed()
@@ -294,6 +296,69 @@ final class AppStore {
         runs.compactMap(\.paceSecondsPerKm).min()
     }
 
+    // MARK: - Squad
+
+    var feedEvents: [SocialEvent] {
+        socialEvents.sorted { $0.date > $1.date }
+    }
+
+    func toggleCheer(_ event: SocialEvent) {
+        guard let index = socialEvents.firstIndex(where: { $0.id == event.id }) else { return }
+        socialEvents[index].cheeredByMe.toggle()
+        socialEvents[index].cheers += socialEvents[index].cheeredByMe ? 1 : -1
+        save()
+    }
+
+    /// Your completions in the last 7 days — feeds the crew progress card.
+    var completedThisWeek: Int {
+        guard let weekAgo = calendar.date(byAdding: .day, value: -7, to: .now) else { return 0 }
+        return commitments.filter {
+            $0.status == .completed && ($0.completedAt ?? $0.date) >= weekAgo
+        }.count
+    }
+
+    // MARK: - Memories
+
+    /// Everything worth remembering, newest first: completed commitments,
+    /// tracked runs, and earned achievements. Derived, never written.
+    var memories: [Memory] {
+        var items: [Memory] = []
+
+        for commitment in commitments where commitment.status == .completed {
+            guard let done = commitment.completedAt else { continue }
+            items.append(Memory(
+                id: "commitment-\(commitment.id)",
+                title: commitment.title,
+                subtitle: "Followed through",
+                icon: commitment.category.icon,
+                date: done
+            ))
+        }
+
+        for run in runs {
+            items.append(Memory(
+                id: "run-\(run.id)",
+                title: "\(RunFormat.kilometers(run.kilometers)) km run",
+                subtitle: "\(RunFormat.duration(run.duration)) · \(RunFormat.pace(run.paceSecondsPerKm)) /km",
+                icon: "figure.run",
+                date: run.date
+            ))
+        }
+
+        for achievement in achievements where achievement.isEarned {
+            items.append(Memory(
+                id: "achievement-\(achievement.id)",
+                title: achievement.title,
+                subtitle: "Achievement unlocked",
+                icon: achievement.icon,
+                date: achievement.earnedAt ?? .now,
+                isHighlight: true
+            ))
+        }
+
+        return items.sorted { $0.date > $1.date }
+    }
+
     // MARK: - Communities
 
     func toggleCommunity(_ community: Community) {
@@ -479,6 +544,7 @@ final class AppStore {
         var friends: [Friend]
         // Optional: added after v1, so older saved snapshots still decode.
         var runs: [Run]?
+        var socialEvents: [SocialEvent]?
         var moodByDay: [String: String]
         var chats: [UUID: [ChatMessage]]
     }
@@ -500,6 +566,7 @@ final class AppStore {
             communities: communities,
             friends: friends,
             runs: runs,
+            socialEvents: socialEvents,
             moodByDay: moodByDay,
             chats: chats
         )
@@ -523,6 +590,7 @@ final class AppStore {
         communities = snapshot.communities
         friends = snapshot.friends
         runs = snapshot.runs ?? []
+        socialEvents = snapshot.socialEvents ?? []
         moodByDay = snapshot.moodByDay
         chats = snapshot.chats
     }

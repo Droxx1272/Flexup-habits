@@ -5,6 +5,7 @@ import SwiftUI
 struct HomeView: View {
     @Environment(AppStore.self) private var store
     @State private var selectedCommitment: Commitment?
+    @State private var showCalendar = false
     @State private var path = NavigationPath()
 
     private let moods = ["😌", "🙂", "😐", "😮‍💨", "😓"]
@@ -28,6 +29,9 @@ struct HomeView: View {
             .safeAreaInset(edge: .bottom) { quickStartButton }
             .sheet(item: $selectedCommitment) { commitment in
                 CommitmentDetailSheet(commitment: commitment)
+            }
+            .sheet(isPresented: $showCalendar) {
+                WeekCalendarView()
             }
             .navigationDestination(for: Activity.self) { activity in
                 ActivityDetailView(activity: activity)
@@ -65,6 +69,16 @@ struct HomeView: View {
                         .foregroundStyle(Theme.inkSubtle)
                 }
                 Spacer()
+                Button {
+                    showCalendar = true
+                } label: {
+                    Image(systemName: "calendar")
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundStyle(Theme.ink)
+                        .padding(12)
+                        .background(Theme.card)
+                        .clipShape(Circle())
+                }
             }
             HStack(spacing: 10) {
                 Text("Mood")

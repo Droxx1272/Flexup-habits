@@ -37,7 +37,8 @@ No dependencies, no packages, no account — everything is local in v1.
 | **Discover** | Nearby activities filtered by category, difficulty, and friends. |
 | **Runs** | GPS run tracking: live time/distance/pace, lifetime stats, run history. Finishing a run auto-completes today's run commitment. |
 | **Activity** | The heart of the app: goal, time, place, attendees, temporary group chat, join/leave, completion. |
-| **Calendar** | Two-week timeline; plan one-off commitments with a verification method. |
+| **Squad** | Social dashboard: action-first feed (every event has a Join or Cheer), crew weekly progress, and Memories — a shareable timeline of completed commitments, runs, and achievements. |
+| **Calendar** | Two-week timeline; plan one-off commitments with a verification method. Opens from the calendar button on Home. |
 | **Profile** | Identity over popularity: identity statement, consistency chart, streaks, achievements, communities, interests. No follower counts. |
 
 ## Architecture
@@ -60,5 +61,5 @@ No dependencies, no packages, no account — everything is local in v1.
 - Backend: accounts, real friends, real activities, communities that organize events.
 - Verification: GPS check-in, partner confirmation, photo proof, HealthKit.
 - AI coach: replace the rules engine behind `CoachInsight` with a model-backed coach.
-- Feed: action-first feed where every post connects to a real activity.
+- Feed: replace Squad's fixture events with real friend activity from the backend.
 - Plus tier: AI planner, smart scheduling, weekly reports, calendar integrations.

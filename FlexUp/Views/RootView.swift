@@ -30,8 +30,8 @@ struct MainTabView: View {
                 .tabItem { Label("Discover", systemImage: "map.fill") }
             RunsView()
                 .tabItem { Label("Runs", systemImage: "figure.run") }
-            WeekCalendarView()
-                .tabItem { Label("Calendar", systemImage: "calendar") }
+            SquadView()
+                .tabItem { Label("Squad", systemImage: "person.3.fill") }
             ProfileView()
                 .tabItem { Label("Profile", systemImage: "person.fill") }
         }

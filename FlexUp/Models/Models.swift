@@ -205,6 +205,51 @@ struct Friend: Identifiable, Codable, Hashable {
     var name: String
 }
 
+/// A feed entry on the Squad dashboard. Every event points at action —
+/// something to join, cheer, or celebrate. Never idle content.
+struct SocialEvent: Identifiable, Codable, Hashable {
+    enum Kind: String, Codable {
+        case completed
+        case created
+        case achievement
+        case milestone
+    }
+
+    var id = UUID()
+    var author: String
+    var kind: Kind
+    var message: String
+    var detail: String?
+    var date: Date
+    var activityID: UUID?
+    var cheers: Int = 0
+    var cheeredByMe: Bool = false
+
+    var icon: String {
+        switch kind {
+        case .completed: "checkmark.circle.fill"
+        case .created: "calendar.badge.plus"
+        case .achievement: "rosette"
+        case .milestone: "flame.fill"
+        }
+    }
+}
+
+/// A moment worth keeping: a completed commitment, a run, an achievement.
+/// Derived from history, never stored — memories are earned, not written.
+struct Memory: Identifiable {
+    var id: String
+    var title: String
+    var subtitle: String
+    var icon: String
+    var date: Date
+    var isHighlight: Bool = false
+
+    var shareText: String {
+        "\(title) — \(subtitle) · \(date.formatted(date: .abbreviated, time: .omitted)) · FlexUp"
+    }
+}
+
 struct Community: Identifiable, Codable, Hashable {
     var id = UUID()
     var name: String
