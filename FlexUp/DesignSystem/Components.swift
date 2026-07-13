@@ -23,32 +23,33 @@ struct FlexCard<Content: View>: View {
 
 // MARK: - Buttons
 
+/// Solid ink pill — the one primary CTA per screen.
 struct PrimaryButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.flexBodyBold())
-            .foregroundStyle(.white)
+            .foregroundStyle(Theme.background)
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 15)
-            .background(Theme.accent.opacity(configuration.isPressed ? 0.85 : 1))
-            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .padding(.vertical, 17)
+            .background(Theme.ink.opacity(configuration.isPressed ? 0.85 : 1))
+            .clipShape(Capsule())
             .scaleEffect(configuration.isPressed ? 0.98 : 1)
             .animation(.spring(duration: 0.2), value: configuration.isPressed)
     }
 }
 
 struct SecondaryButtonStyle: ButtonStyle {
-    var tint: Color = Theme.accent
-    var background: Color = Theme.accentSoft
+    var tint: Color = Theme.ink
+    var background: Color = Theme.ink.opacity(0.08)
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.flexBodyBold())
             .foregroundStyle(tint)
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 15)
-            .background(background.opacity(configuration.isPressed ? 0.7 : 1))
-            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .padding(.vertical, 16)
+            .background(background.opacity(configuration.isPressed ? 0.6 : 1))
+            .clipShape(Capsule())
             .scaleEffect(configuration.isPressed ? 0.98 : 1)
             .animation(.spring(duration: 0.2), value: configuration.isPressed)
     }
@@ -172,6 +173,29 @@ struct AvatarStack: View {
     }
 }
 
+// MARK: - Screen header
+
+/// Huge uppercase title with a monospaced tagline underneath —
+/// "PROFILE / YOUR GAME. YOUR JOURNEY."
+struct ScreenHeader: View {
+    let title: String
+    let tagline: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title.uppercased())
+                .font(.flexDisplay(40))
+                .foregroundStyle(Theme.ink)
+            Text(tagline.uppercased())
+                .font(.flexMono(12))
+                .tracking(2)
+                .foregroundStyle(Theme.inkSubtle)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.top, 8)
+    }
+}
+
 // MARK: - Section header
 
 struct SectionHeader: View {
@@ -179,9 +203,10 @@ struct SectionHeader: View {
     var subtitle: String?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(title)
-                .font(.flexSection())
+        VStack(alignment: .leading, spacing: 3) {
+            Text(title.uppercased())
+                .font(.flexMono(13))
+                .tracking(2)
                 .foregroundStyle(Theme.ink)
             if let subtitle {
                 Text(subtitle)

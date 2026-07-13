@@ -20,6 +20,21 @@ struct WeekCalendarView: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
+                HStack(alignment: .top) {
+                    ScreenHeader(title: "Calendar", tagline: "Plan the week. Keep the plan.")
+                    Button {
+                        showPlanSheet = true
+                    } label: {
+                        Image(systemName: "plus")
+                            .font(.system(size: 17, weight: .bold))
+                            .foregroundStyle(Theme.background)
+                            .padding(12)
+                            .background(Theme.ink)
+                            .clipShape(Circle())
+                    }
+                }
+                .padding(.horizontal, 20)
+
                 dayStrip
                     .padding(.vertical, 12)
 
@@ -33,18 +48,7 @@ struct WeekCalendarView: View {
                 .scrollIndicators(.hidden)
             }
             .background(Theme.background)
-            .navigationTitle("Calendar")
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        showPlanSheet = true
-                    } label: {
-                        Image(systemName: "plus.circle.fill")
-                            .font(.title3)
-                            .foregroundStyle(Theme.accent)
-                    }
-                }
-            }
+            .toolbar(.hidden, for: .navigationBar)
             .sheet(isPresented: $showPlanSheet) {
                 PlanSheet(initialDate: selectedDate)
             }

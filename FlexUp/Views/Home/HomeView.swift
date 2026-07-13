@@ -49,14 +49,20 @@ struct HomeView: View {
     private var header: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .top) {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(Date.now.formatted(.dateTime.weekday(.wide).day().month(.wide)))
-                        .font(.flexCaption())
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(Date.now.formatted(.dateTime.weekday(.wide).day().month(.wide)).uppercased())
+                        .font(.flexMono(12))
+                        .tracking(2)
                         .foregroundStyle(Theme.inkSubtle)
-                        .textCase(.uppercase)
-                    Text("\(greeting), \(store.profile?.name ?? "friend")")
-                        .font(.flexHeading())
+                    Text("HEY \((store.profile?.name ?? "there").uppercased())")
+                        .font(.flexDisplay(36))
                         .foregroundStyle(Theme.ink)
+                        .minimumScaleFactor(0.6)
+                        .lineLimit(1)
+                    Text("\(greeting). What's next?".uppercased())
+                        .font(.flexMono(11))
+                        .tracking(2)
+                        .foregroundStyle(Theme.inkSubtle)
                 }
                 Spacer()
             }
@@ -96,11 +102,11 @@ struct HomeView: View {
                         .font(.system(.subheadline, design: .rounded, weight: .bold))
                         .foregroundStyle(Theme.ink)
                 }
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("Today")
-                        .font(.flexCaption())
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("TODAY")
+                        .font(.flexMono(10))
+                        .tracking(2)
                         .foregroundStyle(Theme.inkSubtle)
-                        .textCase(.uppercase)
                     Text(progressMessage(done: done, total: today.count))
                         .font(.flexBodyBold())
                         .foregroundStyle(Theme.ink)
@@ -126,9 +132,9 @@ struct HomeView: View {
             HStack(spacing: 8) {
                 Image(systemName: "sparkles")
                     .font(.system(size: 14, weight: .semibold))
-                Text("Coach")
-                    .font(.flexCaption())
-                    .textCase(.uppercase)
+                Text("COACH")
+                    .font(.flexMono(11))
+                    .tracking(2)
             }
             .foregroundStyle(Theme.accent)
 
@@ -222,12 +228,12 @@ struct HomeView: View {
                 Text("Quick Start")
             }
             .font(.flexBodyBold())
-            .foregroundStyle(.white)
+            .foregroundStyle(Theme.background)
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 15)
-            .background(Theme.accent)
-            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-            .shadow(color: Theme.accent.opacity(0.35), radius: 12, y: 5)
+            .padding(.vertical, 17)
+            .background(Theme.ink)
+            .clipShape(Capsule())
+            .shadow(color: Theme.ink.opacity(0.3), radius: 12, y: 5)
         }
         .padding(.horizontal, 20)
         .padding(.bottom, 6)

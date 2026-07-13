@@ -22,6 +22,7 @@ struct DiscoverView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
+                    ScreenHeader(title: "Discover", tagline: "Find your next move nearby.")
                     categoryChips
                     refinementChips
 
@@ -46,7 +47,7 @@ struct DiscoverView: View {
             }
             .scrollIndicators(.hidden)
             .background(Theme.background)
-            .navigationTitle("Discover")
+            .toolbar(.hidden, for: .navigationBar)
             .navigationDestination(for: Activity.self) { activity in
                 ActivityDetailView(activity: activity)
             }

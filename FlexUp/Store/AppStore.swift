@@ -16,6 +16,7 @@ final class AppStore {
     var achievements: [Achievement] = []
     var communities: [Community] = []
     var friends: [Friend] = []
+    var runs: [Run] = []
     var moodByDay: [String: String] = [:]
     var chats: [UUID: [ChatMessage]] = [:]
 
@@ -31,6 +32,7 @@ final class AppStore {
     init() {
         load()
         if activities.isEmpty { seedWorld() }
+        mergeAchievementCatalog()
         refreshDiscoverFeed()
         rolloverMissed()
         generateUpcomingCommitments()
@@ -42,6 +44,14 @@ final class AppStore {
         communities = SampleData.communities
         achievements = SampleData.achievements
         friends = SampleData.friends
+    }
+
+    /// New app versions can add achievements; fold any missing catalog
+    /// entries into previously-saved state.
+    private func mergeAchievementCatalog() {
+        for item in SampleData.achievements where !achievements.contains(where: { $0.key == item.key }) {
+            achievements.append(item)
+        }
     }
 
     /// Sample activities have fixed dates; once they've all passed, drop the
@@ -243,6 +253,47 @@ final class AppStore {
             .sorted { $0.date < $1.date }
     }
 
+    // MARK: - Runs
+
+    /// Log a tracked run. Counts toward today's run commitment if one exists,
+    /// so a real run never has to be marked done twice.
+    func logRun(distanceMeters: Double, duration: TimeInterval) {
+        let run = Run(date: .now, distanceMeters: distanceMeters, duration: duration)
+        runs.insert(run, at: 0)
+
+        var unlocked: [Achievement] = []
+        if let a = unlock("first_run") { unlocked.append(a) }
+        if run.kilometers >= 5, let a = unlock("five_k") { unlocked.append(a) }
+
+        if let commitment = todayCommitments.first(where: { $0.category == .run && $0.status != .completed && $0.status != .missed }) {
+            complete(commitment)
+            if celebration?.achievement == nil {
+                celebration?.achievement = unlocked.first
+            }
+        } else {
+            unlocked.append(contentsOf: checkUnlocks())
+            let distanceLine = run.kilometers >= 0.1
+                ? String(format: "%.2f km on your legs, not on your list.", run.kilometers)
+                : "Time on your feet counts."
+            celebration = Celebration(
+                title: "Run logged.",
+                message: distanceLine,
+                streak: nil,
+                achievement: unlocked.first
+            )
+        }
+        save()
+    }
+
+    var totalRunKilometers: Double {
+        runs.reduce(0) { $0 + $1.kilometers }
+    }
+
+    /// Best (lowest) average pace across runs, in seconds per km.
+    var bestPaceSecondsPerKm: Double? {
+        runs.compactMap(\.paceSecondsPerKm).min()
+    }
+
     // MARK: - Communities
 
     func toggleCommunity(_ community: Community) {
@@ -426,6 +477,8 @@ final class AppStore {
         var achievements: [Achievement]
         var communities: [Community]
         var friends: [Friend]
+        // Optional: added after v1, so older saved snapshots still decode.
+        var runs: [Run]?
         var moodByDay: [String: String]
         var chats: [UUID: [ChatMessage]]
     }
@@ -446,6 +499,7 @@ final class AppStore {
             achievements: achievements,
             communities: communities,
             friends: friends,
+            runs: runs,
             moodByDay: moodByDay,
             chats: chats
         )
@@ -468,6 +522,7 @@ final class AppStore {
         achievements = snapshot.achievements
         communities = snapshot.communities
         friends = snapshot.friends
+        runs = snapshot.runs ?? []
         moodByDay = snapshot.moodByDay
         chats = snapshot.chats
     }

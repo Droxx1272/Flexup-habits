@@ -141,13 +141,14 @@ struct TimerSheet: View {
             ZStack {
                 ProgressRing(progress: 1 - Double(remaining) / Double(total), lineWidth: 12)
                     .frame(width: 210, height: 210)
-                VStack(spacing: 4) {
+                VStack(spacing: 6) {
                     Text(timeText)
-                        .font(.system(size: 44, weight: .bold, design: .rounded))
+                        .font(.flexDisplay(54))
                         .monospacedDigit()
                         .foregroundStyle(Theme.ink)
-                    Text(running ? "In progress" : "Paused")
-                        .font(.flexCaption())
+                    Text((running ? "In progress" : "Paused").uppercased())
+                        .font(.flexMono(11))
+                        .tracking(3)
                         .foregroundStyle(Theme.inkSubtle)
                 }
             }

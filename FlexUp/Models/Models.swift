@@ -182,6 +182,22 @@ struct ChatMessage: Identifiable, Codable, Hashable {
     var date: Date = .now
 }
 
+// MARK: - Runs
+
+struct Run: Identifiable, Codable, Hashable {
+    var id = UUID()
+    var date: Date
+    var distanceMeters: Double
+    var duration: TimeInterval
+
+    var kilometers: Double { distanceMeters / 1000 }
+
+    /// Average pace in seconds per km; nil when there's no meaningful distance.
+    var paceSecondsPerKm: Double? {
+        kilometers > 0.05 ? duration / kilometers : nil
+    }
+}
+
 // MARK: - Social
 
 struct Friend: Identifiable, Codable, Hashable {

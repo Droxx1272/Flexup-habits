@@ -1,17 +1,18 @@
 import SwiftUI
 import UIKit
 
-/// FlexUp design tokens. Calm, warm, minimal — lots of whitespace, one
-/// accent, rounded everything. Adapts to light and dark automatically.
+/// FlexUp design tokens. Warm cream canvas, deep navy ink, huge black
+/// display type, monospaced uppercase taglines, ink pill buttons.
+/// Calm and confident — adapts to light and dark automatically.
 enum Theme {
-    static let background = Color(light: 0xF7F6F2, dark: 0x0F0F0E)
-    static let card = Color(light: 0xFFFFFF, dark: 0x1C1C1A)
-    static let ink = Color(light: 0x1D1C18, dark: 0xF2F1EC)
-    static let inkSubtle = Color(light: 0x83806F, dark: 0x9C998F)
+    static let background = Color(light: 0xF4F0E6, dark: 0x121211)
+    static let card = Color(light: 0xFFFFFF, dark: 0x1D1D1B)
+    static let ink = Color(light: 0x1C2733, dark: 0xF1EFE8)
+    static let inkSubtle = Color(light: 0x7D7A6E, dark: 0x9C998F)
     static let accent = Color(light: 0x2F6D53, dark: 0x6FBF97)
-    static let accentSoft = Color(light: 0xE4EFE9, dark: 0x24352C)
+    static let accentSoft = Color(light: 0xE1EAE1, dark: 0x24352C)
     static let amber = Color(light: 0xB07A22, dark: 0xE0AE5C)
-    static let amberSoft = Color(light: 0xF6EDDC, dark: 0x3A2F1B)
+    static let amberSoft = Color(light: 0xF3E9D5, dark: 0x3A2F1B)
     static let danger = Color(light: 0xB0503E, dark: 0xE08A78)
 
     static let cornerRadius: CGFloat = 22
@@ -44,11 +45,33 @@ extension CommitmentStatus {
     }
 }
 
+// MARK: - Typography
+//
+// Three voices, used everywhere:
+//  1. Display — huge, black-weight, uppercase. Screen titles, hero numbers.
+//  2. Mono — monospaced uppercase eyebrows and taglines ("YOUR GAME. YOUR JOURNEY.")
+//  3. Body — quiet system text for everything else.
+
 extension Font {
-    static func flexTitle() -> Font { .system(.largeTitle, design: .rounded, weight: .bold) }
-    static func flexHeading() -> Font { .system(.title2, design: .rounded, weight: .bold) }
-    static func flexSection() -> Font { .system(.title3, design: .rounded, weight: .semibold) }
-    static func flexBody() -> Font { .system(.body, design: .rounded) }
-    static func flexBodyBold() -> Font { .system(.body, design: .rounded, weight: .semibold) }
-    static func flexCaption() -> Font { .system(.caption, design: .rounded, weight: .medium) }
+    /// Huge black display type for screen titles and hero moments.
+    static func flexDisplay(_ size: CGFloat = 38) -> Font {
+        .system(size: size, weight: .black)
+    }
+
+    /// Big heavy numerals for stats.
+    static func flexStat(_ size: CGFloat = 30) -> Font {
+        .system(size: size, weight: .heavy)
+    }
+
+    /// Monospaced eyebrow/tagline text. Pair with .tracking(2) and uppercase.
+    static func flexMono(_ size: CGFloat = 12) -> Font {
+        .system(size: size, weight: .semibold, design: .monospaced)
+    }
+
+    static func flexTitle() -> Font { .system(size: 34, weight: .black) }
+    static func flexHeading() -> Font { .system(.title2, weight: .heavy) }
+    static func flexSection() -> Font { .system(.title3, weight: .bold) }
+    static func flexBody() -> Font { .system(.body) }
+    static func flexBodyBold() -> Font { .system(.body, weight: .semibold) }
+    static func flexCaption() -> Font { .system(.caption, weight: .medium) }
 }

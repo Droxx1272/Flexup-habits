@@ -12,6 +12,7 @@ struct ProfileView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
+                    ScreenHeader(title: "Profile", tagline: "Your progress. Your people.")
                     identityHeader
                     statTiles
                     consistencyCard
@@ -24,7 +25,7 @@ struct ProfileView: View {
             }
             .scrollIndicators(.hidden)
             .background(Theme.background)
-            .navigationTitle("Profile")
+            .toolbar(.hidden, for: .navigationBar)
         }
     }
 
@@ -34,16 +35,19 @@ struct ProfileView: View {
         FlexCard {
             HStack(spacing: 16) {
                 AvatarCircle(name: store.profile?.name ?? "You", size: 64)
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(store.profile?.name ?? "You")
-                        .font(.flexHeading())
+                VStack(alignment: .leading, spacing: 5) {
+                    Text((store.profile?.name ?? "You").uppercased())
+                        .font(.flexDisplay(26))
                         .foregroundStyle(Theme.ink)
+                        .minimumScaleFactor(0.6)
+                        .lineLimit(1)
                     Text("Becoming \(store.profile?.identityStatement ?? "consistent")")
-                        .font(.flexBody())
+                        .font(.flexBodyBold())
                         .foregroundStyle(Theme.accent)
                     if let joined = store.profile?.joinedAt {
-                        Text("Member since \(joined.formatted(.dateTime.month(.wide).year()))")
-                            .font(.flexCaption())
+                        Text("Member since \(joined.formatted(.dateTime.month(.wide).year()))".uppercased())
+                            .font(.flexMono(10))
+                            .tracking(1.5)
                             .foregroundStyle(Theme.inkSubtle)
                     }
                 }
@@ -64,20 +68,24 @@ struct ProfileView: View {
     }
 
     private func statTile(value: String, label: String, icon: String, tint: Color) -> some View {
-        VStack(spacing: 5) {
+        VStack(spacing: 7) {
             Image(systemName: icon)
-                .font(.system(size: 14, weight: .semibold))
+                .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(tint)
-            Text(value)
-                .font(.system(.title3, design: .rounded, weight: .bold))
-                .foregroundStyle(Theme.ink)
-                .minimumScaleFactor(0.7)
-            Text(label)
-                .font(.system(.caption2, design: .rounded, weight: .medium))
+            Text(label.uppercased())
+                .font(.flexMono(9))
+                .tracking(1)
                 .foregroundStyle(Theme.inkSubtle)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+            Text(value)
+                .font(.flexStat(24))
+                .foregroundStyle(Theme.ink)
+                .minimumScaleFactor(0.6)
+                .lineLimit(1)
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 14)
+        .padding(.vertical, 16)
         .background(Theme.card)
         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
     }

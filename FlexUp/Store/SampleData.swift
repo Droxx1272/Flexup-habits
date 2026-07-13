@@ -147,6 +147,8 @@ enum SampleData {
         Achievement(key: "ten_done", title: "Ten Done", detail: "Complete 10 commitments.", category: .milestones, icon: "10.circle.fill"),
         Achievement(key: "explorer", title: "Explorer", detail: "Complete commitments in 3 different categories.", category: .exploration, icon: "map.fill"),
         Achievement(key: "early_bird", title: "Early Bird", detail: "Complete something before 8 AM.", category: .consistency, icon: "sunrise.fill", isHidden: true),
+        Achievement(key: "first_run", title: "First Run", detail: "Track your first run.", category: .firsts, icon: "figure.run"),
+        Achievement(key: "five_k", title: "5K", detail: "Run 5 km in a single run.", category: .milestones, icon: "medal.fill"),
         Achievement(key: "host", title: "Host", detail: "Organize an activity for others.", category: .leadership, icon: "megaphone.fill"),
     ]
 

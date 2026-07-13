@@ -35,6 +35,7 @@ No dependencies, no packages, no account — everything is local in v1.
 | --- | --- |
 | **Home** | Command center: today's commitments, progress ring, mood, coach insight, friends' upcoming activities, Quick Start. |
 | **Discover** | Nearby activities filtered by category, difficulty, and friends. |
+| **Runs** | GPS run tracking: live time/distance/pace, lifetime stats, run history. Finishing a run auto-completes today's run commitment. |
 | **Activity** | The heart of the app: goal, time, place, attendees, temporary group chat, join/leave, completion. |
 | **Calendar** | Two-week timeline; plan one-off commitments with a verification method. |
 | **Profile** | Identity over popularity: identity statement, consistency chart, streaks, achievements, communities, interests. No follower counts. |
@@ -49,7 +50,8 @@ No dependencies, no packages, no account — everything is local in v1.
 
 ## Product principles encoded in the code
 
-- One primary CTA per screen; calm, rounded, whitespace-heavy design; light and dark themes.
+- One primary CTA per screen; calm, whitespace-heavy design; light and dark themes.
+- Typography system: huge black display titles (`HEY DEVMAY`), monospaced uppercase taglines (`YOUR PROGRESS. YOUR PEOPLE.`), ink pill buttons, giant stat numerals.
 - No XP, no levels, no infinite scroll, no popularity metrics.
 - Success is measured in completions and follow-through, not screen time — the celebration screen's only button sends you back to your life.
 
