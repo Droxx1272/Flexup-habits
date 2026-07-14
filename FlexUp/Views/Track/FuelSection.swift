@@ -176,6 +176,10 @@ struct AddFoodSheet: View {
     @State private var photoData: Data?
     @State private var showCamera = false
     @State private var showLibrary = false
+    @State private var estimating = false
+    @State private var estimateNote: String?
+    @State private var estimateError: String?
+    @State private var showKeyEntry = false
 
     init(meal: MealType) {
         _meal = State(initialValue: meal)
@@ -228,7 +232,8 @@ struct AddFoodSheet: View {
                     .clipShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
             }
 
-            // Snap the plate — a photo makes the log honest.
+            // Snap the plate — a photo makes the log honest, and AI can
+            // estimate the calories from it.
             HStack(spacing: 10) {
                 if let photoData, let image = UIImage(data: photoData) {
                     Image(uiImage: image)
@@ -238,12 +243,34 @@ struct AddFoodSheet: View {
                         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                     Button {
                         self.photoData = nil
+                        estimateNote = nil
+                        estimateError = nil
                     } label: {
-                        Label("Remove photo", systemImage: "xmark.circle.fill")
-                            .font(.flexCaption())
+                        Image(systemName: "xmark.circle.fill")
                             .foregroundStyle(Theme.inkSubtle)
                     }
                     .buttonStyle(.plain)
+                    Button {
+                        runEstimate()
+                    } label: {
+                        HStack(spacing: 6) {
+                            if estimating {
+                                ProgressView()
+                                    .controlSize(.small)
+                            } else {
+                                Image(systemName: "sparkles")
+                            }
+                            Text(estimating ? "Estimating…" : "Estimate with AI")
+                        }
+                        .font(.flexCaption())
+                        .foregroundStyle(Theme.accent)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 10)
+                        .background(Theme.accentSoft)
+                        .clipShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(estimating)
                 } else {
                     Button {
                         if cameraAvailable { showCamera = true } else { showLibrary = true }
@@ -259,6 +286,18 @@ struct AddFoodSheet: View {
                     .buttonStyle(.plain)
                 }
                 Spacer()
+            }
+
+            if let estimateNote {
+                Text(estimateNote.uppercased())
+                    .font(.flexMono(9))
+                    .tracking(1)
+                    .foregroundStyle(Theme.accent)
+            }
+            if let estimateError {
+                Text(estimateError)
+                    .font(.flexCaption())
+                    .foregroundStyle(Theme.danger)
             }
 
             SectionHeader(title: "Quick add")
@@ -313,6 +352,100 @@ struct AddFoodSheet: View {
                 photoData = image.jpegData(compressionQuality: 0.8)
             }
         }
+        .sheet(isPresented: $showKeyEntry) {
+            APIKeySheet {
+                runEstimate()
+            }
+        }
+    }
+
+    private func runEstimate() {
+        guard let photoData, let image = UIImage(data: photoData) else { return }
+        guard !store.anthropicAPIKey.isEmpty else {
+            showKeyEntry = true
+            return
+        }
+
+        estimating = true
+        estimateError = nil
+        estimateNote = nil
+        let apiKey = store.anthropicAPIKey
+
+        Task {
+            do {
+                let estimate = try await CalorieEstimator.estimate(image: image, apiKey: apiKey)
+                await MainActor.run {
+                    name = estimate.foodName
+                    calories = estimate.calories
+                    estimateNote = "\(estimate.confidence) confidence · \(estimate.notes)"
+                    estimating = false
+                }
+            } catch {
+                await MainActor.run {
+                    estimateError = error.localizedDescription
+                    estimating = false
+                }
+            }
+        }
+    }
+}
+
+// MARK: - API key entry
+
+/// One-time setup for the AI estimator. The key stays on this device —
+/// a backend proxy replaces this before any public release.
+struct APIKeySheet: View {
+    var onSaved: () -> Void
+    @Environment(AppStore.self) private var store
+    @Environment(\.dismiss) private var dismiss
+    @State private var key = ""
+
+    var body: some View {
+        VStack(spacing: 16) {
+            Capsule()
+                .fill(Theme.inkSubtle.opacity(0.3))
+                .frame(width: 36, height: 5)
+                .padding(.top, 10)
+
+            Image(systemName: "sparkles")
+                .font(.system(size: 30))
+                .foregroundStyle(Theme.accent)
+                .padding(.top, 8)
+
+            Text("SET UP AI ESTIMATES")
+                .font(.flexMono(12))
+                .tracking(2)
+                .foregroundStyle(Theme.ink)
+
+            Text("Paste an Anthropic API key (console.anthropic.com → API Keys). It's stored only on this phone and each estimate costs about a cent.")
+                .font(.flexCaption())
+                .foregroundStyle(Theme.inkSubtle)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 24)
+
+            SecureField("sk-ant-…", text: $key)
+                .font(.flexBodyBold())
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .padding(14)
+                .background(Theme.card)
+                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .padding(.horizontal, 20)
+
+            Button("Save & estimate") {
+                store.anthropicAPIKey = key.trimmingCharacters(in: .whitespacesAndNewlines)
+                dismiss()
+                onSaved()
+            }
+            .buttonStyle(PrimaryButtonStyle())
+            .disabled(key.trimmingCharacters(in: .whitespaces).isEmpty)
+            .opacity(key.trimmingCharacters(in: .whitespaces).isEmpty ? 0.4 : 1)
+            .padding(.horizontal, 20)
+
+            Spacer()
+        }
+        .background(Theme.background)
+        .presentationDetents([.medium])
     }
 }
 

@@ -891,4 +891,14 @@ final class AppStore {
     func dismissCelebration() {
         celebration = nil
     }
+
+    // MARK: - AI
+
+    /// Anthropic API key for the calorie estimator. Prototype-only storage:
+    /// lives in UserDefaults on this device. Before any public release this
+    /// moves to a backend proxy so no key ships in the app.
+    var anthropicAPIKey: String {
+        get { UserDefaults.standard.string(forKey: "anthropicAPIKey") ?? "" }
+        set { UserDefaults.standard.set(newValue, forKey: "anthropicAPIKey") }
+    }
 }
