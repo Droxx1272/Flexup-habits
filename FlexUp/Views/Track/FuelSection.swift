@@ -1,7 +1,8 @@
 import SwiftUI
+import UIKit
 
 /// Calorie tracking, deliberately simple: a daily budget, four meals,
-/// quick-add foods. Awareness over obsession.
+/// quick-add foods — and snap the plate while you're at it.
 struct FuelSection: View {
     @Environment(AppStore.self) private var store
     @State private var showAddFood = false
@@ -123,6 +124,14 @@ struct FuelSection: View {
                 } else {
                     ForEach(entries) { entry in
                         HStack {
+                            if let fileName = entry.photoFileName,
+                               let image = UIImage(contentsOfFile: store.imageURL(fileName: fileName).path) {
+                                Image(uiImage: image)
+                                    .resizable()
+                                    .scaledToFill()
+                                    .frame(width: 34, height: 34)
+                                    .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+                            }
                             Text(entry.name)
                                 .font(.flexBody())
                                 .foregroundStyle(Theme.ink)
@@ -164,9 +173,16 @@ struct AddFoodSheet: View {
     @State private var meal: MealType
     @State private var name = ""
     @State private var calories: Int?
+    @State private var photoData: Data?
+    @State private var showCamera = false
+    @State private var showLibrary = false
 
     init(meal: MealType) {
         _meal = State(initialValue: meal)
+    }
+
+    private var cameraAvailable: Bool {
+        UIImagePickerController.isSourceTypeAvailable(.camera)
     }
 
     private var canSave: Bool {
@@ -212,6 +228,39 @@ struct AddFoodSheet: View {
                     .clipShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
             }
 
+            // Snap the plate — a photo makes the log honest.
+            HStack(spacing: 10) {
+                if let photoData, let image = UIImage(data: photoData) {
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: 52, height: 52)
+                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    Button {
+                        self.photoData = nil
+                    } label: {
+                        Label("Remove photo", systemImage: "xmark.circle.fill")
+                            .font(.flexCaption())
+                            .foregroundStyle(Theme.inkSubtle)
+                    }
+                    .buttonStyle(.plain)
+                } else {
+                    Button {
+                        if cameraAvailable { showCamera = true } else { showLibrary = true }
+                    } label: {
+                        Label("Snap your meal", systemImage: "camera")
+                            .font(.flexCaption())
+                            .foregroundStyle(Theme.accent)
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 10)
+                            .background(Theme.accentSoft)
+                            .clipShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                }
+                Spacer()
+            }
+
             SectionHeader(title: "Quick add")
             ScrollView {
                 LazyVGrid(columns: columns, spacing: 8) {
@@ -242,7 +291,7 @@ struct AddFoodSheet: View {
             .scrollIndicators(.hidden)
 
             Button("Add to \(meal.label.lowercased())") {
-                store.addFood(name: name, calories: calories ?? 0, meal: meal)
+                store.addFood(name: name, calories: calories ?? 0, meal: meal, photoData: photoData)
                 dismiss()
             }
             .buttonStyle(PrimaryButtonStyle())
@@ -253,6 +302,17 @@ struct AddFoodSheet: View {
         .padding(.bottom, 12)
         .background(Theme.background)
         .presentationDetents([.large])
+        .fullScreenCover(isPresented: $showCamera) {
+            CameraPicker { image in
+                photoData = image.jpegData(compressionQuality: 0.8)
+            }
+            .ignoresSafeArea()
+        }
+        .sheet(isPresented: $showLibrary) {
+            LibraryPicker { image in
+                photoData = image.jpegData(compressionQuality: 0.8)
+            }
+        }
     }
 }
 

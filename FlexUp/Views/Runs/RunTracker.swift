@@ -15,7 +15,12 @@ final class RunTracker: NSObject, CLLocationManagerDelegate {
     var phase: Phase = .idle
     var elapsed: TimeInterval = 0
     var distanceMeters: Double = 0
+    var elevationGain: Double = 0
+    var routeCoordinates: [CLLocationCoordinate2D] = []
     var locationDenied = false
+
+    @ObservationIgnored private var splitTimes: [Double] = []
+    @ObservationIgnored private var lastAltitude: Double?
 
     @ObservationIgnored private let manager = CLLocationManager()
     @ObservationIgnored private var lastLocation: CLLocation?
@@ -37,6 +42,10 @@ final class RunTracker: NSObject, CLLocationManagerDelegate {
         guard phase == .idle else { return }
         elapsed = 0
         distanceMeters = 0
+        elevationGain = 0
+        routeCoordinates = []
+        splitTimes = []
+        lastAltitude = nil
         lastLocation = nil
         accumulated = 0
         segmentStart = .now
@@ -54,6 +63,7 @@ final class RunTracker: NSObject, CLLocationManagerDelegate {
         guard phase == .running else { return }
         manager.stopUpdatingLocation()
         lastLocation = nil
+        lastAltitude = nil
         timer?.invalidate()
         if let start = segmentStart {
             accumulated += Date.now.timeIntervalSince(start)
@@ -71,8 +81,16 @@ final class RunTracker: NSObject, CLLocationManagerDelegate {
         phase = .running
     }
 
+    struct RunResult {
+        var distanceMeters: Double
+        var duration: TimeInterval
+        var route: [RoutePoint]
+        var splitsSeconds: [Double]
+        var elevationGainM: Double
+    }
+
     /// Stop tracking and hand back the totals. Resets to idle.
-    func finish() -> (distanceMeters: Double, duration: TimeInterval) {
+    func finish() -> RunResult {
         manager.stopUpdatingLocation()
         timer?.invalidate()
         timer = nil
@@ -81,8 +99,15 @@ final class RunTracker: NSObject, CLLocationManagerDelegate {
         }
         segmentStart = nil
         refreshElapsed()
-        let result = (distanceMeters, elapsed)
+        let result = RunResult(
+            distanceMeters: distanceMeters,
+            duration: elapsed,
+            route: routeCoordinates.map { RoutePoint(lat: $0.latitude, lon: $0.longitude) },
+            splitsSeconds: splitTimes,
+            elevationGainM: elevationGain
+        )
         lastLocation = nil
+        lastAltitude = nil
         phase = .idle
         return result
     }
@@ -118,9 +143,30 @@ final class RunTracker: NSObject, CLLocationManagerDelegate {
                 // Ignore sub-metre jitter and impossible jumps.
                 if delta >= 1 && delta <= 100 {
                     distanceMeters += delta
+                    routeCoordinates.append(location.coordinate)
+                    recordSplitsIfNeeded()
                 }
+            } else {
+                routeCoordinates.append(location.coordinate)
             }
             lastLocation = location
+
+            // Elevation gain from barometer/GPS altitude when it's trustworthy.
+            if location.verticalAccuracy >= 0 && location.verticalAccuracy <= 20 {
+                if let previous = lastAltitude {
+                    elevationGain += max(0, location.altitude - previous)
+                }
+                lastAltitude = location.altitude
+            }
+        }
+    }
+
+    /// Close out a per-km split each time the odometer crosses a whole km.
+    private func recordSplitsIfNeeded() {
+        refreshElapsed()
+        while splitTimes.count < Int(distanceMeters / 1000) {
+            let previousTotal = splitTimes.reduce(0, +)
+            splitTimes.append(elapsed - previousTotal)
         }
     }
 

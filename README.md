@@ -36,9 +36,9 @@ Four pillars plus the proof — one tab each, nothing buried:
 | Tab | Purpose |
 | --- | --- |
 | **Wake** | Erly-style mornings: wake time with repeating alarm notification, morning check-in (photo of the sky counts), weekly streak strip. No snoozing, no backup alarms. |
-| **Run** | GPS tracking (Strava-style): live time/distance/pace, lifetime stats, history. |
+| **Run** | GPS tracking (Strava-style): live route map while recording, time/distance/pace/elevation, per-km splits, and a run detail view with the route drawn, headline stats, and split pace bars. |
 | **Gym** | Training log (Hevy-style): live session with exercises, sets × kg × reps, per-exercise bests, volume stats, history. |
-| **Diet** | Calorie tracking (Lose It-style): daily budget ring, four meals, quick-add foods. |
+| **Diet** | Calorie tracking (Lose It-style): daily budget ring, four meals, quick-add foods, and meal photos — snap the plate when you log it. |
 | **Stats** | The everything-view: today's progress, per-pillar streaks and totals, weekly consistency chart, progress photos with pose guides and then-vs-now comparison, achievements. |
 
 Discover, Squad (social feed + memories), Calendar, Activity detail, and the coach remain in the codebase but out of the nav — the navigation stays simple until the pillars are solid.

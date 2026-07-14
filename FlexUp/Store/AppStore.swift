@@ -266,8 +266,21 @@ final class AppStore {
 
     /// Log a tracked run. Counts toward today's run commitment if one exists,
     /// so a real run never has to be marked done twice.
-    func logRun(distanceMeters: Double, duration: TimeInterval) {
-        let run = Run(date: .now, distanceMeters: distanceMeters, duration: duration)
+    func logRun(
+        distanceMeters: Double,
+        duration: TimeInterval,
+        route: [RoutePoint] = [],
+        splitsSeconds: [Double] = [],
+        elevationGainM: Double = 0
+    ) {
+        let run = Run(
+            date: .now,
+            distanceMeters: distanceMeters,
+            duration: duration,
+            route: route,
+            splitsSeconds: splitsSeconds,
+            elevationGainM: elevationGainM
+        )
         runs.insert(run, at: 0)
 
         var unlocked: [Achievement] = []
@@ -368,14 +381,18 @@ final class AppStore {
 
     // MARK: - Fuel
 
-    func addFood(name: String, calories: Int, meal: MealType) {
+    func addFood(name: String, calories: Int, meal: MealType, photoData: Data? = nil) {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, calories > 0 else { return }
-        foodEntries.insert(FoodEntry(name: trimmed, calories: calories, meal: meal), at: 0)
+        let fileName = photoData.flatMap { saveImage($0) }
+        foodEntries.insert(FoodEntry(name: trimmed, calories: calories, meal: meal, photoFileName: fileName), at: 0)
         save()
     }
 
     func deleteFood(_ entry: FoodEntry) {
+        if let fileName = entry.photoFileName {
+            try? FileManager.default.removeItem(at: imageURL(fileName: fileName))
+        }
         foodEntries.removeAll { $0.id == entry.id }
         save()
     }
@@ -480,16 +497,24 @@ final class AppStore {
         photosDirectory.appendingPathComponent(photo.fileName)
     }
 
-    @discardableResult
-    func addProgressPhoto(imageData: Data, pose: PhotoPose) -> ProgressPhoto? {
+    func imageURL(fileName: String) -> URL {
+        photosDirectory.appendingPathComponent(fileName)
+    }
+
+    /// Write image data into the app's photo directory; returns the file name.
+    func saveImage(_ data: Data) -> String? {
         let fileName = "\(UUID().uuidString).jpg"
-        let url = photosDirectory.appendingPathComponent(fileName)
         do {
-            try imageData.write(to: url, options: .atomic)
+            try data.write(to: photosDirectory.appendingPathComponent(fileName), options: .atomic)
+            return fileName
         } catch {
             return nil
         }
+    }
 
+    @discardableResult
+    func addProgressPhoto(imageData: Data, pose: PhotoPose) -> ProgressPhoto? {
+        guard let fileName = saveImage(imageData) else { return nil }
         let photo = ProgressPhoto(date: .now, pose: pose, fileName: fileName)
         progressPhotos.insert(photo, at: 0)
 

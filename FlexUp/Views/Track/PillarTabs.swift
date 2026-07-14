@@ -16,6 +16,9 @@ struct RunTabView: View {
             .scrollIndicators(.hidden)
             .background(Theme.background)
             .toolbar(.hidden, for: .navigationBar)
+            .navigationDestination(for: Run.self) { run in
+                RunDetailView(run: run)
+            }
         }
     }
 }

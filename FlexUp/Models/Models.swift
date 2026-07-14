@@ -1,4 +1,5 @@
 import Foundation
+import CoreLocation
 
 // MARK: - Core loop: Plan → Commit → Do → Verify → Celebrate → Repeat
 
@@ -184,17 +185,41 @@ struct ChatMessage: Identifiable, Codable, Hashable {
 
 // MARK: - Runs
 
+struct RoutePoint: Codable, Hashable {
+    var lat: Double
+    var lon: Double
+
+    var coordinate: CLLocationCoordinate2D {
+        CLLocationCoordinate2D(latitude: lat, longitude: lon)
+    }
+}
+
 struct Run: Identifiable, Codable, Hashable {
     var id = UUID()
     var date: Date
     var distanceMeters: Double
     var duration: TimeInterval
+    // Optional: added after the first release so older saved runs still decode.
+    var route: [RoutePoint]?
+    var splitsSeconds: [Double]?
+    var elevationGainM: Double?
 
     var kilometers: Double { distanceMeters / 1000 }
 
     /// Average pace in seconds per km; nil when there's no meaningful distance.
     var paceSecondsPerKm: Double? {
         kilometers > 0.05 ? duration / kilometers : nil
+    }
+
+    var coordinates: [CLLocationCoordinate2D] {
+        (route ?? []).map(\.coordinate)
+    }
+
+    var splits: [Double] { splitsSeconds ?? [] }
+
+    /// Distance beyond the last full-km split, in meters.
+    var finalPartialMeters: Double {
+        distanceMeters - Double(splits.count) * 1000
     }
 }
 
@@ -251,6 +276,8 @@ struct FoodEntry: Identifiable, Codable, Hashable {
     var calories: Int
     var meal: MealType
     var date: Date = .now
+    /// Optional meal photo, stored in the app's photo directory.
+    var photoFileName: String?
 }
 
 // MARK: - Lift (training log)
