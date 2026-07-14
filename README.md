@@ -31,15 +31,17 @@ No dependencies, no packages, no account — everything is local in v1.
 
 ## App structure
 
-| Screen | Purpose |
+Four pillars plus the proof — one tab each, nothing buried:
+
+| Tab | Purpose |
 | --- | --- |
-| **Home** | Command center: today's commitments, progress ring, mood, coach insight, friends' upcoming activities, Quick Start. |
-| **Discover** | Nearby activities filtered by category, difficulty, and friends. |
-| **Track** | Four trackers, one loop. **Run**: GPS time/distance/pace (Strava-style). **Lift**: training log with exercises, sets × kg × reps, per-exercise bests (Hevy-style). **Fuel**: daily calorie budget and meal log (Lose It-style). **Photos**: progress pictures with pose guides and then-vs-now comparison. Runs and workouts auto-complete matching commitments. |
-| **Activity** | The heart of the app: goal, time, place, attendees, temporary group chat, join/leave, completion. |
-| **Squad** | Social dashboard: action-first feed (every event has a Join or Cheer), crew weekly progress, and Memories — a shareable timeline of completed commitments, runs, and achievements. |
-| **Calendar** | Two-week timeline; plan one-off commitments with a verification method. Opens from the calendar button on Home. |
-| **Profile** | Identity over popularity: identity statement, consistency chart, streaks, achievements, communities, interests. No follower counts. |
+| **Wake** | Erly-style mornings: wake time with repeating alarm notification, morning check-in (photo of the sky counts), weekly streak strip. No snoozing, no backup alarms. |
+| **Run** | GPS tracking (Strava-style): live time/distance/pace, lifetime stats, history. |
+| **Gym** | Training log (Hevy-style): live session with exercises, sets × kg × reps, per-exercise bests, volume stats, history. |
+| **Diet** | Calorie tracking (Lose It-style): daily budget ring, four meals, quick-add foods. |
+| **Stats** | The everything-view: today's progress, per-pillar streaks and totals, weekly consistency chart, progress photos with pose guides and then-vs-now comparison, achievements. |
+
+Discover, Squad (social feed + memories), Calendar, Activity detail, and the coach remain in the codebase but out of the nav — the navigation stays simple until the pillars are solid.
 
 ## Architecture
 

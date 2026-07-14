@@ -198,6 +198,24 @@ struct Run: Identifiable, Codable, Hashable {
     }
 }
 
+// MARK: - Wake (mornings)
+
+struct WakeConfig: Codable, Hashable {
+    var hour = 6
+    var minute = 30
+    /// Calendar weekdays (1 = Sunday … 7 = Saturday) the wake-up applies to.
+    var days: Set<Int> = [2, 3, 4, 5, 6]
+    var enabled = false
+
+    var timeToday: Date {
+        Calendar.current.date(bySettingHour: hour, minute: minute, second: 0, of: .now) ?? .now
+    }
+
+    var timeLabel: String {
+        timeToday.formatted(date: .omitted, time: .shortened)
+    }
+}
+
 // MARK: - Fuel (calorie tracking)
 
 enum MealType: String, Codable, CaseIterable, Identifiable {

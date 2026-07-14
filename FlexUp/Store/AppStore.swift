@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import UserNotifications
 
 /// Single source of truth for the app. Everything the UI shows flows from
 /// here, and every user action lands here — one place to later swap local
@@ -21,6 +22,8 @@ final class AppStore {
     var foodEntries: [FoodEntry] = []
     var progressPhotos: [ProgressPhoto] = []
     var calorieBudget: Int = 2200
+    var wake = WakeConfig()
+    var wakeCheckInDays: Set<String> = []
     var socialEvents: [SocialEvent] = []
     var moodByDay: [String: String] = [:]
     var chats: [UUID: [ChatMessage]] = [:]
@@ -387,6 +390,83 @@ final class AppStore {
             .reduce(0) { $0 + $1.calories }
     }
 
+    // MARK: - Wake
+
+    var isWakeCheckedInToday: Bool {
+        wakeCheckInDays.contains(dayKey())
+    }
+
+    /// Consecutive scheduled wake days checked in, counting back from today
+    /// (an unchecked today doesn't break the streak yet).
+    var wakeStreak: Int {
+        var streak = 0
+        var offset = isWakeCheckedInToday ? 0 : 1
+        while offset < 366 {
+            guard let day = calendar.date(byAdding: .day, value: -offset, to: .now) else { break }
+            let weekday = calendar.component(.weekday, from: day)
+            if wake.days.contains(weekday) {
+                if wakeCheckInDays.contains(dayKey(day)) {
+                    streak += 1
+                } else {
+                    break
+                }
+            }
+            offset += 1
+        }
+        return streak
+    }
+
+    /// Morning check-in — once per day. An optional photo (sky, grass, made
+    /// bed) files as a check-in shot.
+    func checkInWake(withPhoto data: Data? = nil) {
+        guard !isWakeCheckedInToday else { return }
+        if let data {
+            addProgressPhoto(imageData: data, pose: .proof)
+        }
+        wakeCheckInDays.insert(dayKey())
+
+        var unlocked: [Achievement] = []
+        if calendar.component(.hour, from: .now) < 8, let a = unlock("early_bird") { unlocked.append(a) }
+
+        let streak = wakeStreak
+        celebration = Celebration(
+            title: "Morning won.",
+            message: streak > 1
+                ? "That's \(streak) wake-ups in a row. The day is yours before it starts."
+                : "Up is up. Everything else gets easier from here.",
+            streak: streak > 1 ? streak : nil,
+            achievement: unlocked.first
+        )
+        save()
+    }
+
+    /// Re-sync the repeating wake-up notifications with the current config.
+    func updateWakeSchedule() {
+        let center = UNUserNotificationCenter.current()
+        center.removePendingNotificationRequests(withIdentifiers: (1...7).map { "wake-\($0)" })
+        save()
+        guard wake.enabled else { return }
+
+        center.requestAuthorization(options: [.alert, .sound]) { [weak self] granted, _ in
+            guard granted, let self else { return }
+            let config = self.wake
+            for weekday in config.days {
+                var components = DateComponents()
+                components.weekday = weekday
+                components.hour = config.hour
+                components.minute = config.minute
+
+                let content = UNMutableNotificationContent()
+                content.title = "Wake up. You said so."
+                content.body = "Check in before the day decides for you."
+                content.sound = .default
+
+                let trigger = UNCalendarNotificationTrigger(dateMatching: components, repeats: true)
+                center.add(UNNotificationRequest(identifier: "wake-\(weekday)", content: content, trigger: trigger))
+            }
+        }
+    }
+
     // MARK: - Progress photos
 
     private var photosDirectory: URL {
@@ -718,6 +798,8 @@ final class AppStore {
         var foodEntries: [FoodEntry]?
         var progressPhotos: [ProgressPhoto]?
         var calorieBudget: Int?
+        var wake: WakeConfig?
+        var wakeCheckInDays: Set<String>?
         var socialEvents: [SocialEvent]?
         var moodByDay: [String: String]
         var chats: [UUID: [ChatMessage]]
@@ -744,6 +826,8 @@ final class AppStore {
             foodEntries: foodEntries,
             progressPhotos: progressPhotos,
             calorieBudget: calorieBudget,
+            wake: wake,
+            wakeCheckInDays: wakeCheckInDays,
             socialEvents: socialEvents,
             moodByDay: moodByDay,
             chats: chats
@@ -772,6 +856,8 @@ final class AppStore {
         foodEntries = snapshot.foodEntries ?? []
         progressPhotos = snapshot.progressPhotos ?? []
         calorieBudget = snapshot.calorieBudget ?? 2200
+        wake = snapshot.wake ?? WakeConfig()
+        wakeCheckInDays = snapshot.wakeCheckInDays ?? []
         socialEvents = snapshot.socialEvents ?? []
         moodByDay = snapshot.moodByDay
         chats = snapshot.chats

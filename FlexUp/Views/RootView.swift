@@ -21,19 +21,21 @@ struct RootView: View {
     }
 }
 
+/// One tab per pillar, plus Stats. Everything else (Discover, Squad,
+/// Calendar, coach) stays in the codebase for later — the nav stays simple.
 struct MainTabView: View {
     var body: some View {
         TabView {
-            HomeView()
-                .tabItem { Label("Home", systemImage: "house.fill") }
-            DiscoverView()
-                .tabItem { Label("Discover", systemImage: "map.fill") }
-            TrackView()
-                .tabItem { Label("Track", systemImage: "chart.bar.fill") }
-            SquadView()
-                .tabItem { Label("Squad", systemImage: "person.3.fill") }
-            ProfileView()
-                .tabItem { Label("Profile", systemImage: "person.fill") }
+            WakeView()
+                .tabItem { Label("Wake", systemImage: "sunrise.fill") }
+            RunTabView()
+                .tabItem { Label("Run", systemImage: "figure.run") }
+            GymTabView()
+                .tabItem { Label("Gym", systemImage: "dumbbell.fill") }
+            DietTabView()
+                .tabItem { Label("Diet", systemImage: "fork.knife") }
+            StatsView()
+                .tabItem { Label("Stats", systemImage: "chart.bar.fill") }
         }
         .tint(Theme.accent)
     }
