@@ -17,7 +17,7 @@ Plan → Commit → Do → Verify → Celebrate → Repeat
 - **Plan** — onboarding turns "who I'm becoming" into scheduled habits; the Calendar plans one-off commitments; Discover finds activities with real people.
 - **Commit** — every plan becomes a `Commitment` with a status lifecycle: scheduled → confirmed → completed / missed / rescheduled.
 - **Do** — Home answers "what should I do next?"; Quick Start removes friction to begin something right now.
-- **Verify** — timer verification runs a real countdown in v1; photo, partner, and GPS verification are modeled and light up with the backend. No fake completions.
+- **Verify** — timer verification runs a real countdown; photo verification opens the camera (the shot is filed as a check-in); runs and workouts verify themselves by being tracked. Partner and GPS check-in verification light up with the backend. No fake completions.
 - **Celebrate** — a completion moment with streaks and meaningful achievements (firsts, consistency, community, exploration, milestones, leadership — including hidden ones).
 - **Repeat** — missed days roll over honestly, streaks reset, and the coach nudges a restart without guilt.
 
@@ -35,7 +35,7 @@ No dependencies, no packages, no account — everything is local in v1.
 | --- | --- |
 | **Home** | Command center: today's commitments, progress ring, mood, coach insight, friends' upcoming activities, Quick Start. |
 | **Discover** | Nearby activities filtered by category, difficulty, and friends. |
-| **Runs** | GPS run tracking: live time/distance/pace, lifetime stats, run history. Finishing a run auto-completes today's run commitment. |
+| **Track** | Four trackers, one loop. **Run**: GPS time/distance/pace (Strava-style). **Lift**: training log with exercises, sets × kg × reps, per-exercise bests (Hevy-style). **Fuel**: daily calorie budget and meal log (Lose It-style). **Photos**: progress pictures with pose guides and then-vs-now comparison. Runs and workouts auto-complete matching commitments. |
 | **Activity** | The heart of the app: goal, time, place, attendees, temporary group chat, join/leave, completion. |
 | **Squad** | Social dashboard: action-first feed (every event has a Join or Cheer), crew weekly progress, and Memories — a shareable timeline of completed commitments, runs, and achievements. |
 | **Calendar** | Two-week timeline; plan one-off commitments with a verification method. Opens from the calendar button on Home. |

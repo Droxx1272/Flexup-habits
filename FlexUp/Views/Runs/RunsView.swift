@@ -1,30 +1,20 @@
 import SwiftUI
 
-/// The running section: lifetime stats, one big Start button, and history.
-/// Finishing a run auto-completes today's run commitment.
-struct RunsView: View {
+/// The running section of Track: lifetime stats, one big Start button, and
+/// history. Finishing a run auto-completes today's run commitment.
+struct RunSection: View {
     @Environment(AppStore.self) private var store
     @State private var tracker = RunTracker()
     @State private var showActiveRun = false
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 22) {
-                    ScreenHeader(title: "Runs", tagline: "Every kilometre counts.")
-                    statRow
-                    startButton
-                    historySection
-                }
-                .padding(.horizontal, 20)
-                .padding(.bottom, 24)
-            }
-            .scrollIndicators(.hidden)
-            .background(Theme.background)
-            .toolbar(.hidden, for: .navigationBar)
-            .fullScreenCover(isPresented: $showActiveRun) {
-                ActiveRunView(tracker: tracker)
-            }
+        VStack(alignment: .leading, spacing: 18) {
+            statRow
+            startButton
+            historySection
+        }
+        .fullScreenCover(isPresented: $showActiveRun) {
+            ActiveRunView(tracker: tracker)
         }
     }
 
@@ -32,28 +22,10 @@ struct RunsView: View {
 
     private var statRow: some View {
         HStack(spacing: 10) {
-            runStat(value: RunFormat.kilometers(store.totalRunKilometers), label: "Total KM")
-            runStat(value: "\(store.runs.count)", label: "Runs")
-            runStat(value: RunFormat.pace(store.bestPaceSecondsPerKm), label: "Best pace")
+            TrackStat(value: RunFormat.kilometers(store.totalRunKilometers), label: "Total KM")
+            TrackStat(value: "\(store.runs.count)", label: "Runs")
+            TrackStat(value: RunFormat.pace(store.bestPaceSecondsPerKm), label: "Best pace")
         }
-    }
-
-    private func runStat(value: String, label: String) -> some View {
-        VStack(spacing: 6) {
-            Text(value)
-                .font(.flexStat(26))
-                .foregroundStyle(Theme.ink)
-                .minimumScaleFactor(0.6)
-                .lineLimit(1)
-            Text(label.uppercased())
-                .font(.flexMono(10))
-                .tracking(1.5)
-                .foregroundStyle(Theme.inkSubtle)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 18)
-        .background(Theme.card)
-        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
     }
 
     // MARK: Start
@@ -88,6 +60,31 @@ struct RunsView: View {
                 }
             }
         }
+    }
+}
+
+// MARK: - Shared stat tile for Track sections
+
+struct TrackStat: View {
+    let value: String
+    let label: String
+
+    var body: some View {
+        VStack(spacing: 6) {
+            Text(value)
+                .font(.flexStat(26))
+                .foregroundStyle(Theme.ink)
+                .minimumScaleFactor(0.6)
+                .lineLimit(1)
+            Text(label.uppercased())
+                .font(.flexMono(10))
+                .tracking(1.5)
+                .foregroundStyle(Theme.inkSubtle)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 18)
+        .background(Theme.card)
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
     }
 }
 
@@ -233,9 +230,4 @@ struct ActiveRunView: View {
             Button("Keep running", role: .cancel) {}
         }
     }
-}
-
-#Preview {
-    RunsView()
-        .environment(AppStore())
 }

@@ -28,8 +28,8 @@ struct MainTabView: View {
                 .tabItem { Label("Home", systemImage: "house.fill") }
             DiscoverView()
                 .tabItem { Label("Discover", systemImage: "map.fill") }
-            RunsView()
-                .tabItem { Label("Runs", systemImage: "figure.run") }
+            TrackView()
+                .tabItem { Label("Track", systemImage: "chart.bar.fill") }
             SquadView()
                 .tabItem { Label("Squad", systemImage: "person.3.fill") }
             ProfileView()

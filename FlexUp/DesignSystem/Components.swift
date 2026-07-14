@@ -252,6 +252,40 @@ struct EmptyStateCard: View {
     }
 }
 
+// MARK: - Segment pills
+
+/// Capsule segmented control in the FlexUp voice — mono uppercase labels,
+/// ink-filled selection.
+struct SegmentPills<T: Identifiable & Hashable & RawRepresentable>: View where T.RawValue == String {
+    let items: [T]
+    @Binding var selection: T
+
+    var body: some View {
+        HStack(spacing: 6) {
+            ForEach(items) { item in
+                Button {
+                    withAnimation(.spring(duration: 0.25)) { selection = item }
+                } label: {
+                    Text(item.rawValue.uppercased())
+                        .font(.flexMono(11))
+                        .tracking(1.5)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 11)
+                        .background(selection == item ? Theme.ink : .clear)
+                        .foregroundStyle(selection == item ? Theme.background : Theme.inkSubtle)
+                        .clipShape(Capsule())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(4)
+        .background(Theme.card)
+        .clipShape(Capsule())
+    }
+}
+
 // MARK: - Selectable chip
 
 struct SelectableChip: View {

@@ -17,6 +17,10 @@ final class AppStore {
     var communities: [Community] = []
     var friends: [Friend] = []
     var runs: [Run] = []
+    var workouts: [Workout] = []
+    var foodEntries: [FoodEntry] = []
+    var progressPhotos: [ProgressPhoto] = []
+    var calorieBudget: Int = 2200
     var socialEvents: [SocialEvent] = []
     var moodByDay: [String: String] = [:]
     var chats: [UUID: [ChatMessage]] = [:]
@@ -296,6 +300,152 @@ final class AppStore {
         runs.compactMap(\.paceSecondsPerKm).min()
     }
 
+    // MARK: - Lift
+
+    /// Log a finished workout. Sets with zero reps are dropped; counts
+    /// toward today's gym commitment if one exists.
+    func logWorkout(title: String, duration: TimeInterval, exercises: [WorkoutExercise]) {
+        let cleaned = exercises
+            .map { exercise in
+                var copy = exercise
+                copy.sets = exercise.sets.filter { $0.reps > 0 }
+                return copy
+            }
+            .filter { !$0.sets.isEmpty }
+        guard !cleaned.isEmpty else { return }
+
+        let workout = Workout(
+            title: title.trimmingCharacters(in: .whitespaces).isEmpty ? "Workout" : title,
+            date: .now,
+            duration: duration,
+            exercises: cleaned
+        )
+        workouts.insert(workout, at: 0)
+
+        var unlocked: [Achievement] = []
+        if let a = unlock("first_lift") { unlocked.append(a) }
+        if workout.totalVolumeKg >= 1000, let a = unlock("ton_lifted") { unlocked.append(a) }
+
+        if let commitment = todayCommitments.first(where: { $0.category == .gym && $0.status != .completed && $0.status != .missed }) {
+            complete(commitment)
+            if celebration?.achievement == nil {
+                celebration?.achievement = unlocked.first
+            }
+        } else {
+            unlocked.append(contentsOf: checkUnlocks())
+            celebration = Celebration(
+                title: "Session logged.",
+                message: "\(Int(workout.totalVolumeKg)) kg moved across \(workout.totalSets) sets. Strength is built, not found.",
+                streak: nil,
+                achievement: unlocked.first
+            )
+        }
+        save()
+    }
+
+    var totalVolumeKg: Double {
+        workouts.reduce(0) { $0 + $1.totalVolumeKg }
+    }
+
+    var workoutsThisWeek: Int {
+        guard let weekAgo = calendar.date(byAdding: .day, value: -7, to: .now) else { return 0 }
+        return workouts.filter { $0.date >= weekAgo }.count
+    }
+
+    /// Heaviest set ever logged for an exercise — shown while logging.
+    func bestWeight(for exerciseName: String) -> Double? {
+        workouts
+            .flatMap(\.exercises)
+            .filter { $0.name == exerciseName }
+            .flatMap(\.sets)
+            .filter { $0.reps > 0 }
+            .map(\.weightKg)
+            .max()
+    }
+
+    // MARK: - Fuel
+
+    func addFood(name: String, calories: Int, meal: MealType) {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, calories > 0 else { return }
+        foodEntries.insert(FoodEntry(name: trimmed, calories: calories, meal: meal), at: 0)
+        save()
+    }
+
+    func deleteFood(_ entry: FoodEntry) {
+        foodEntries.removeAll { $0.id == entry.id }
+        save()
+    }
+
+    func todayFood(for meal: MealType) -> [FoodEntry] {
+        foodEntries.filter { $0.meal == meal && calendar.isDateInToday($0.date) }
+    }
+
+    var caloriesToday: Int {
+        foodEntries
+            .filter { calendar.isDateInToday($0.date) }
+            .reduce(0) { $0 + $1.calories }
+    }
+
+    // MARK: - Progress photos
+
+    private var photosDirectory: URL {
+        let directory = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("FlexUp/Photos", isDirectory: true)
+        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        return directory
+    }
+
+    func imageURL(for photo: ProgressPhoto) -> URL {
+        photosDirectory.appendingPathComponent(photo.fileName)
+    }
+
+    @discardableResult
+    func addProgressPhoto(imageData: Data, pose: PhotoPose) -> ProgressPhoto? {
+        let fileName = "\(UUID().uuidString).jpg"
+        let url = photosDirectory.appendingPathComponent(fileName)
+        do {
+            try imageData.write(to: url, options: .atomic)
+        } catch {
+            return nil
+        }
+
+        let photo = ProgressPhoto(date: .now, pose: pose, fileName: fileName)
+        progressPhotos.insert(photo, at: 0)
+
+        let unlocked = unlock("first_photo")
+        // Proof photos are part of completing a commitment — that flow owns
+        // the celebration. Pose photos celebrate here.
+        if pose != .proof {
+            celebration = Celebration(
+                title: "Day \(photoDayNumber(for: photo)).",
+                message: "Same pose, same spot, every week. Future you will thank you for this.",
+                streak: nil,
+                achievement: unlocked
+            )
+        }
+        save()
+        return photo
+    }
+
+    func deleteProgressPhoto(_ photo: ProgressPhoto) {
+        try? FileManager.default.removeItem(at: imageURL(for: photo))
+        progressPhotos.removeAll { $0.id == photo.id }
+        save()
+    }
+
+    func photos(for pose: PhotoPose) -> [ProgressPhoto] {
+        progressPhotos
+            .filter { $0.pose == pose }
+            .sorted { $0.date < $1.date }
+    }
+
+    private func photoDayNumber(for photo: ProgressPhoto) -> Int {
+        guard let first = progressPhotos.map(\.date).min() else { return 1 }
+        let days = calendar.dateComponents([.day], from: calendar.startOfDay(for: first), to: calendar.startOfDay(for: photo.date)).day ?? 0
+        return days + 1
+    }
+
     // MARK: - Squad
 
     var feedEvents: [SocialEvent] {
@@ -342,6 +492,26 @@ final class AppStore {
                 subtitle: "\(RunFormat.duration(run.duration)) · \(RunFormat.pace(run.paceSecondsPerKm)) /km",
                 icon: "figure.run",
                 date: run.date
+            ))
+        }
+
+        for workout in workouts {
+            items.append(Memory(
+                id: "workout-\(workout.id)",
+                title: workout.title,
+                subtitle: "\(Int(workout.totalVolumeKg)) kg · \(workout.totalSets) sets",
+                icon: "dumbbell",
+                date: workout.date
+            ))
+        }
+
+        for photo in progressPhotos where photo.pose != .proof {
+            items.append(Memory(
+                id: "photo-\(photo.id)",
+                title: "Progress photo",
+                subtitle: "\(photo.pose.label) pose",
+                icon: "camera",
+                date: photo.date
             ))
         }
 
@@ -544,6 +714,10 @@ final class AppStore {
         var friends: [Friend]
         // Optional: added after v1, so older saved snapshots still decode.
         var runs: [Run]?
+        var workouts: [Workout]?
+        var foodEntries: [FoodEntry]?
+        var progressPhotos: [ProgressPhoto]?
+        var calorieBudget: Int?
         var socialEvents: [SocialEvent]?
         var moodByDay: [String: String]
         var chats: [UUID: [ChatMessage]]
@@ -566,6 +740,10 @@ final class AppStore {
             communities: communities,
             friends: friends,
             runs: runs,
+            workouts: workouts,
+            foodEntries: foodEntries,
+            progressPhotos: progressPhotos,
+            calorieBudget: calorieBudget,
             socialEvents: socialEvents,
             moodByDay: moodByDay,
             chats: chats
@@ -590,6 +768,10 @@ final class AppStore {
         communities = snapshot.communities
         friends = snapshot.friends
         runs = snapshot.runs ?? []
+        workouts = snapshot.workouts ?? []
+        foodEntries = snapshot.foodEntries ?? []
+        progressPhotos = snapshot.progressPhotos ?? []
+        calorieBudget = snapshot.calorieBudget ?? 2200
         socialEvents = snapshot.socialEvents ?? []
         moodByDay = snapshot.moodByDay
         chats = snapshot.chats

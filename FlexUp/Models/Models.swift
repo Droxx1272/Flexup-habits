@@ -198,6 +198,116 @@ struct Run: Identifiable, Codable, Hashable {
     }
 }
 
+// MARK: - Fuel (calorie tracking)
+
+enum MealType: String, Codable, CaseIterable, Identifiable {
+    case breakfast
+    case lunch
+    case dinner
+    case snack
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .breakfast: "Breakfast"
+        case .lunch: "Lunch"
+        case .dinner: "Dinner"
+        case .snack: "Snacks"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .breakfast: "sunrise"
+        case .lunch: "sun.max"
+        case .dinner: "moon"
+        case .snack: "takeoutbag.and.cup.and.straw"
+        }
+    }
+}
+
+struct FoodEntry: Identifiable, Codable, Hashable {
+    var id = UUID()
+    var name: String
+    var calories: Int
+    var meal: MealType
+    var date: Date = .now
+}
+
+// MARK: - Lift (training log)
+
+struct ExerciseSet: Identifiable, Codable, Hashable {
+    var id = UUID()
+    var weightKg: Double = 0
+    var reps: Int = 0
+}
+
+struct WorkoutExercise: Identifiable, Codable, Hashable {
+    var id = UUID()
+    var name: String
+    var sets: [ExerciseSet] = [ExerciseSet()]
+}
+
+struct Workout: Identifiable, Codable, Hashable {
+    var id = UUID()
+    var title: String
+    var date: Date
+    var duration: TimeInterval
+    var exercises: [WorkoutExercise]
+
+    var totalVolumeKg: Double {
+        exercises.flatMap(\.sets).reduce(0) { $0 + $1.weightKg * Double($1.reps) }
+    }
+
+    var totalSets: Int {
+        exercises.reduce(0) { $0 + $1.sets.count }
+    }
+}
+
+// MARK: - Progress photos
+
+enum PhotoPose: String, Codable, CaseIterable, Identifiable {
+    case front
+    case side
+    case back
+    case flex
+    /// Photo taken to verify a commitment (BeReal-style proof, not a pose).
+    case proof
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .front: "Front"
+        case .side: "Side"
+        case .back: "Back"
+        case .flex: "Flex"
+        case .proof: "Check-in"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .front: "figure.stand"
+        case .side: "figure.walk"
+        case .back: "figure.arms.open"
+        case .flex: "figure.strengthtraining.traditional"
+        case .proof: "checkmark.seal"
+        }
+    }
+
+    /// Poses offered in the capture flow (proof is system-generated).
+    static var captureCases: [PhotoPose] { [.front, .side, .back, .flex] }
+}
+
+struct ProgressPhoto: Identifiable, Codable, Hashable {
+    var id = UUID()
+    var date: Date
+    var pose: PhotoPose
+    var fileName: String
+}
+
 // MARK: - Social
 
 struct Friend: Identifiable, Codable, Hashable {

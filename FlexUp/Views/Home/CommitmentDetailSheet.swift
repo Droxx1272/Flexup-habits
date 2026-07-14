@@ -1,8 +1,9 @@
 import SwiftUI
+import UIKit
 
-/// Do → Verify. Timer verification runs a real countdown; honor completes
-/// directly; backend-dependent methods (photo, partner, GPS) fall back to
-/// honor in v1 and say so honestly.
+/// Do → Verify. Timer verification runs a real countdown; photo verification
+/// opens the camera and files the shot as a check-in; partner and GPS fall
+/// back to honor in v1 and say so honestly.
 struct CommitmentDetailSheet: View {
     @Environment(AppStore.self) private var store
     @Environment(\.dismiss) private var dismiss
@@ -11,6 +12,8 @@ struct CommitmentDetailSheet: View {
 
     @State private var showTimer = false
     @State private var showReschedule = false
+    @State private var showProofCamera = false
+    @State private var showProofLibrary = false
     @State private var newDate = Date()
 
     private var live: Commitment { store.liveCommitment(commitment) }
@@ -55,6 +58,17 @@ struct CommitmentDetailSheet: View {
                         Label("Start \(live.durationMinutes)-minute timer", systemImage: "timer")
                     }
                     .buttonStyle(PrimaryButtonStyle())
+                } else if live.verification == .photo {
+                    Button {
+                        if UIImagePickerController.isSourceTypeAvailable(.camera) {
+                            showProofCamera = true
+                        } else {
+                            showProofLibrary = true
+                        }
+                    } label: {
+                        Label("Take photo to complete", systemImage: "camera")
+                    }
+                    .buttonStyle(PrimaryButtonStyle())
                 } else {
                     Button("Mark completed") {
                         store.complete(live)
@@ -97,11 +111,32 @@ struct CommitmentDetailSheet: View {
                 dismiss()
             }
         }
+        .fullScreenCover(isPresented: $showProofCamera) {
+            CameraPicker { image in
+                completeWithProof(image)
+            }
+            .ignoresSafeArea()
+        }
+        .sheet(isPresented: $showProofLibrary) {
+            LibraryPicker { image in
+                completeWithProof(image)
+            }
+        }
+    }
+
+    /// BeReal-style check-in: the photo is the completion. Proof shots land
+    /// in Track → Photos under "Check-in".
+    private func completeWithProof(_ image: UIImage) {
+        if let data = image.jpegData(compressionQuality: 0.85) {
+            store.addProgressPhoto(imageData: data, pose: .proof)
+        }
+        store.complete(live)
+        dismiss()
     }
 
     private var needsFallbackNote: Bool {
         live.status != .completed &&
-        (live.verification == .photo || live.verification == .partner || live.verification == .location)
+        (live.verification == .partner || live.verification == .location)
     }
 }
 

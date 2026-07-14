@@ -25,6 +25,58 @@ enum SampleData {
         HabitTemplate(title: "Call a friend", category: .social, weekdays: [1], timeOfDay: .evening, verification: .honor, durationMinutes: 15),
     ]
 
+    /// Exercise library for the Lift logger.
+    struct ExerciseTemplate: Identifiable, Hashable {
+        var id: String { name }
+        var name: String
+        var muscle: String
+    }
+
+    static let exerciseCatalog: [ExerciseTemplate] = [
+        ExerciseTemplate(name: "Bench Press", muscle: "Chest"),
+        ExerciseTemplate(name: "Incline Dumbbell Press", muscle: "Chest"),
+        ExerciseTemplate(name: "Cable Fly", muscle: "Chest"),
+        ExerciseTemplate(name: "Push-up", muscle: "Chest"),
+        ExerciseTemplate(name: "Squat", muscle: "Legs"),
+        ExerciseTemplate(name: "Leg Press", muscle: "Legs"),
+        ExerciseTemplate(name: "Romanian Deadlift", muscle: "Legs"),
+        ExerciseTemplate(name: "Lunge", muscle: "Legs"),
+        ExerciseTemplate(name: "Calf Raise", muscle: "Legs"),
+        ExerciseTemplate(name: "Hip Thrust", muscle: "Glutes"),
+        ExerciseTemplate(name: "Deadlift", muscle: "Back"),
+        ExerciseTemplate(name: "Barbell Row", muscle: "Back"),
+        ExerciseTemplate(name: "Lat Pulldown", muscle: "Back"),
+        ExerciseTemplate(name: "Pull-up", muscle: "Back"),
+        ExerciseTemplate(name: "Seated Row", muscle: "Back"),
+        ExerciseTemplate(name: "Overhead Press", muscle: "Shoulders"),
+        ExerciseTemplate(name: "Lateral Raise", muscle: "Shoulders"),
+        ExerciseTemplate(name: "Bicep Curl", muscle: "Arms"),
+        ExerciseTemplate(name: "Tricep Pushdown", muscle: "Arms"),
+        ExerciseTemplate(name: "Plank", muscle: "Core"),
+    ]
+
+    /// One-tap foods for the Fuel logger.
+    struct QuickFood: Identifiable, Hashable {
+        var id: String { name }
+        var name: String
+        var calories: Int
+    }
+
+    static let quickFoods: [QuickFood] = [
+        QuickFood(name: "Oats bowl", calories: 220),
+        QuickFood(name: "2 eggs", calories: 156),
+        QuickFood(name: "Banana", calories: 105),
+        QuickFood(name: "Apple", calories: 95),
+        QuickFood(name: "Chicken breast", calories: 165),
+        QuickFood(name: "Paneer 100g", calories: 265),
+        QuickFood(name: "Rice bowl", calories: 240),
+        QuickFood(name: "Dal bowl", calories: 180),
+        QuickFood(name: "2 rotis", calories: 200),
+        QuickFood(name: "Protein shake", calories: 180),
+        QuickFood(name: "Greek yogurt", calories: 120),
+        QuickFood(name: "Handful of nuts", calories: 170),
+    ]
+
     static let friends: [Friend] = [
         Friend(name: "Aman"),
         Friend(name: "Sarah"),
@@ -189,6 +241,9 @@ enum SampleData {
         Achievement(key: "early_bird", title: "Early Bird", detail: "Complete something before 8 AM.", category: .consistency, icon: "sunrise.fill", isHidden: true),
         Achievement(key: "first_run", title: "First Run", detail: "Track your first run.", category: .firsts, icon: "figure.run"),
         Achievement(key: "five_k", title: "5K", detail: "Run 5 km in a single run.", category: .milestones, icon: "medal.fill"),
+        Achievement(key: "first_lift", title: "First Session", detail: "Log your first workout.", category: .firsts, icon: "dumbbell"),
+        Achievement(key: "ton_lifted", title: "The Ton", detail: "Lift 1,000 kg of volume in one session.", category: .milestones, icon: "scalemass.fill"),
+        Achievement(key: "first_photo", title: "Day One", detail: "Take your first progress photo.", category: .firsts, icon: "camera.fill"),
         Achievement(key: "host", title: "Host", detail: "Organize an activity for others.", category: .leadership, icon: "megaphone.fill"),
     ]
 
