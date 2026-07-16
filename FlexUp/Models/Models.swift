@@ -449,6 +449,21 @@ struct Achievement: Identifiable, Codable, Hashable {
     var isEarned: Bool { earnedAt != nil }
 }
 
+// MARK: - Account (login)
+
+enum AuthProvider: String, Codable {
+    case apple
+    case email
+}
+
+struct Account: Codable, Hashable {
+    var userID: String
+    var name: String
+    var email: String?
+    var provider: AuthProvider
+    var createdAt: Date = .now
+}
+
 // MARK: - Profile
 
 struct UserProfile: Codable {

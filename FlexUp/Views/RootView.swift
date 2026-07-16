@@ -5,10 +5,12 @@ struct RootView: View {
 
     var body: some View {
         Group {
-            if store.hasOnboarded {
-                MainTabView()
-            } else {
+            if !store.isSignedIn {
+                AuthView()
+            } else if !store.hasOnboarded {
                 OnboardingView()
+            } else {
+                MainTabView()
             }
         }
         .overlay {

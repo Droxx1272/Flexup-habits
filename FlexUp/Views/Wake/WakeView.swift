@@ -30,7 +30,7 @@ struct WakeView: View {
             }
             .fullScreenCover(isPresented: $showProofCamera) {
                 CameraPicker { image in
-                    if let data = image.jpegData(compressionQuality: 0.85) {
+                    if let data = image.flexJPEGData() {
                         store.checkInWake(withPhoto: data)
                     }
                 }

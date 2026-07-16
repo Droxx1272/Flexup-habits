@@ -11,6 +11,7 @@ final class AppStore {
     // MARK: - State
 
     var profile: UserProfile?
+    var account: Account?
     var habits: [Habit] = []
     var commitments: [Commitment] = []
     var activities: [Activity] = []
@@ -32,6 +33,19 @@ final class AppStore {
     var celebration: Celebration?
 
     var hasOnboarded: Bool { profile != nil }
+    var isSignedIn: Bool { account != nil }
+
+    func signIn(_ account: Account) {
+        self.account = account
+        save()
+    }
+
+    /// Signing out gates the app behind login again. Local data stays on
+    /// device — signing back in with the same account picks it right up.
+    func signOut() {
+        account = nil
+        save()
+    }
 
     private let calendar = Calendar.current
 
@@ -811,6 +825,7 @@ final class AppStore {
 
     private struct Snapshot: Codable {
         var profile: UserProfile?
+        var account: Account?
         var habits: [Habit]
         var commitments: [Commitment]
         var activities: [Activity]
@@ -837,9 +852,15 @@ final class AppStore {
         return directory.appendingPathComponent("state.json")
     }
 
+    @ObservationIgnored private var pendingSave: Task<Void, Never>?
+
+    /// Debounced, off-main-thread persistence. Encoding the whole snapshot
+    /// synchronously on every mutation caused visible stutters — now rapid
+    /// mutations coalesce into one background disk write.
     func save() {
         let snapshot = Snapshot(
             profile: profile,
+            account: account,
             habits: habits,
             commitments: commitments,
             activities: activities,
@@ -857,10 +878,17 @@ final class AppStore {
             moodByDay: moodByDay,
             chats: chats
         )
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .iso8601
-        if let data = try? encoder.encode(snapshot) {
-            try? data.write(to: storeURL, options: .atomic)
+        let url = storeURL
+
+        pendingSave?.cancel()
+        pendingSave = Task.detached(priority: .utility) {
+            try? await Task.sleep(nanoseconds: 250_000_000)
+            guard !Task.isCancelled else { return }
+            let encoder = JSONEncoder()
+            encoder.dateEncodingStrategy = .iso8601
+            if let data = try? encoder.encode(snapshot) {
+                try? data.write(to: url, options: .atomic)
+            }
         }
     }
 
@@ -870,6 +898,7 @@ final class AppStore {
         decoder.dateDecodingStrategy = .iso8601
         guard let snapshot = try? decoder.decode(Snapshot.self, from: data) else { return }
         profile = snapshot.profile
+        account = snapshot.account
         habits = snapshot.habits
         commitments = snapshot.commitments
         activities = snapshot.activities

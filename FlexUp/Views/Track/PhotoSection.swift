@@ -131,23 +131,10 @@ struct PhotoSection: View {
 struct PhotoThumb: View {
     @Environment(AppStore.self) private var store
     let photo: ProgressPhoto
+    var maxPixel: CGFloat = 500
 
     var body: some View {
-        GeometryReader { proxy in
-            if let image = UIImage(contentsOfFile: store.imageURL(for: photo).path) {
-                Image(uiImage: image)
-                    .resizable()
-                    .scaledToFill()
-                    .frame(width: proxy.size.width, height: proxy.size.height)
-                    .clipped()
-            } else {
-                ZStack {
-                    Theme.card
-                    Image(systemName: "photo")
-                        .foregroundStyle(Theme.inkSubtle)
-                }
-            }
-        }
+        AsyncPhotoView(url: store.imageURL(for: photo), maxPixel: maxPixel)
     }
 }
 
@@ -238,7 +225,7 @@ struct PoseCaptureSheet: View {
     }
 
     private func savePhoto(_ image: UIImage) {
-        guard let data = image.jpegData(compressionQuality: 0.85) else { return }
+        guard let data = image.flexJPEGData() else { return }
         store.addProgressPhoto(imageData: data, pose: pose)
         dismiss()
     }

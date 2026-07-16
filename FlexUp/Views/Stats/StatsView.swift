@@ -6,6 +6,7 @@ import Charts
 /// picture.
 struct StatsView: View {
     @Environment(AppStore.self) private var store
+    @State private var confirmSignOut = false
 
     private let achievementColumns = [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())]
 
@@ -20,6 +21,7 @@ struct StatsView: View {
                     consistencyCard
                     photosSection
                     achievementsSection
+                    accountSection
                 }
                 .padding(.horizontal, 20)
                 .padding(.bottom, 24)
@@ -151,6 +153,52 @@ struct StatsView: View {
                     achievementTile(achievement)
                 }
             }
+        }
+    }
+
+    // MARK: Account
+
+    private var accountSection: some View {
+        FlexCard {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("ACCOUNT")
+                    .font(.flexMono(11))
+                    .tracking(2)
+                    .foregroundStyle(Theme.inkSubtle)
+                HStack(spacing: 12) {
+                    Image(systemName: store.account?.provider == .apple ? "apple.logo" : "envelope")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(Theme.ink)
+                        .frame(width: 36, height: 36)
+                        .background(Theme.background)
+                        .clipShape(Circle())
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(store.account?.name.isEmpty == false ? store.account!.name : (store.profile?.name ?? "You"))
+                            .font(.flexBodyBold())
+                            .foregroundStyle(Theme.ink)
+                        if let email = store.account?.email {
+                            Text(email)
+                                .font(.flexCaption())
+                                .foregroundStyle(Theme.inkSubtle)
+                        }
+                    }
+                    Spacer()
+                    Button("Sign out") {
+                        confirmSignOut = true
+                    }
+                    .font(.flexCaption())
+                    .foregroundStyle(Theme.danger)
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+        .confirmationDialog("Sign out of FlexUp?", isPresented: $confirmSignOut, titleVisibility: .visible) {
+            Button("Sign out", role: .destructive) {
+                store.signOut()
+            }
+            Button("Stay signed in", role: .cancel) {}
+        } message: {
+            Text("Your data stays on this device and is here when you sign back in.")
         }
     }
 

@@ -1,175 +1,310 @@
 import SwiftUI
 
-/// Three steps, one promise: tell us who you're becoming, and we'll help
-/// you follow through. Ends with real habits on a real calendar.
+/// Onboarding, one question per screen: progress bar and back arrow up top,
+/// a single big question, one pill button at the bottom. Ends with the wake
+/// pillar configured so day one starts tomorrow morning.
 struct OnboardingView: View {
     @Environment(AppStore.self) private var store
 
-    @State private var step = 0
+    private enum Step: Int, CaseIterable {
+        case welcome, name, identity, interests, habits, wake
+    }
+
+    @State private var step: Step = .welcome
     @State private var name = ""
     @State private var identity = ""
     @State private var interests: Set<ActivityCategory> = []
     @State private var selectedTemplates: Set<HabitTemplate> = []
+    @State private var wakeTime = Calendar.current.date(bySettingHour: 6, minute: 30, second: 0, of: .now) ?? .now
+    @State private var wakeDays: Set<Int> = [2, 3, 4, 5, 6]
+    @State private var wakeAlarm = true
 
-    private let identitySuggestions = [
-        "a runner", "an early riser", "consistent", "a reader", "stronger every week",
-    ]
+    private let identitySuggestions = ["a runner", "an early riser", "stronger", "consistent", "a morning person"]
+    private let dayLetters = ["S", "M", "T", "W", "T", "F", "S"]
+    private let interestColumns = [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)]
 
     private var suggestedTemplates: [HabitTemplate] {
         let matching = SampleData.habitTemplates.filter { interests.contains($0.category) }
-        return matching.isEmpty ? SampleData.habitTemplates : matching
+        return Array((matching.isEmpty ? SampleData.habitTemplates : matching).prefix(6))
     }
 
     private var canContinue: Bool {
         switch step {
-        case 0: true
-        case 1: !name.trimmingCharacters(in: .whitespaces).isEmpty
-        case 2: !interests.isEmpty && !selectedTemplates.isEmpty
-        default: false
+        case .welcome: true
+        case .name: !name.trimmingCharacters(in: .whitespaces).isEmpty
+        case .identity: true
+        case .interests: !interests.isEmpty
+        case .habits: !selectedTemplates.isEmpty
+        case .wake: !wakeDays.isEmpty
+        }
+    }
+
+    private var buttonLabel: String {
+        switch step {
+        case .welcome: "Get started"
+        case .wake: "Start tomorrow morning"
+        default: "Continue"
         }
     }
 
     var body: some View {
         VStack(spacing: 0) {
+            topBar
+
             ScrollView {
-                VStack(alignment: .leading, spacing: 24) {
+                Group {
                     switch step {
-                    case 0: welcome
-                    case 1: identityStep
-                    default: habitsStep
+                    case .welcome: welcomeStep
+                    case .name: nameStep
+                    case .identity: identityStep
+                    case .interests: interestsStep
+                    case .habits: habitsStep
+                    case .wake: wakeStep
                     }
                 }
-                .padding(24)
+                .id(step)
+                .transition(.asymmetric(
+                    insertion: .move(edge: .trailing).combined(with: .opacity),
+                    removal: .move(edge: .leading).combined(with: .opacity)
+                ))
+                .padding(.horizontal, 24)
+                .padding(.top, 20)
+                .padding(.bottom, 24)
             }
             .scrollIndicators(.hidden)
+            .scrollDismissesKeyboard(.interactively)
+            .animation(.spring(duration: 0.32), value: step)
 
-            Button(step == 2 ? "Start showing up" : "Continue") {
-                if step < 2 {
-                    withAnimation(.spring(duration: 0.35)) { step += 1 }
-                } else {
-                    store.completeOnboarding(
-                        name: name.trimmingCharacters(in: .whitespaces),
-                        identity: identity.isEmpty ? "someone who follows through" : identity,
-                        interests: Array(interests),
-                        templates: Array(selectedTemplates)
-                    )
-                }
-            }
-            .buttonStyle(PrimaryButtonStyle())
-            .disabled(!canContinue)
-            .opacity(canContinue ? 1 : 0.4)
-            .padding(.horizontal, 24)
-            .padding(.bottom, 16)
+            Button(buttonLabel) { advance() }
+                .buttonStyle(PrimaryButtonStyle())
+                .disabled(!canContinue)
+                .opacity(canContinue ? 1 : 0.4)
+                .padding(.horizontal, 24)
+                .padding(.bottom, 14)
         }
         .background(Theme.background)
+        .onAppear {
+            if name.isEmpty {
+                name = store.account?.name ?? ""
+            }
+        }
     }
 
-    // MARK: Step 0 — Welcome
+    // MARK: Top bar (back arrow + progress)
 
-    private var welcome: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            Spacer(minLength: 40)
+    private var topBar: some View {
+        HStack(spacing: 14) {
+            Button {
+                goBack()
+            } label: {
+                Image(systemName: "arrow.left")
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(Theme.ink)
+            }
+            .opacity(step == .welcome ? 0 : 1)
+            .disabled(step == .welcome)
+
+            GeometryReader { proxy in
+                ZStack(alignment: .leading) {
+                    Capsule()
+                        .fill(Theme.ink.opacity(0.1))
+                    Capsule()
+                        .fill(Theme.ink)
+                        .frame(width: proxy.size.width * progressFraction)
+                }
+            }
+            .frame(height: 5)
+            .animation(.spring(duration: 0.35), value: step)
+        }
+        .padding(.horizontal, 24)
+        .padding(.top, 14)
+    }
+
+    private var progressFraction: CGFloat {
+        CGFloat(step.rawValue) / CGFloat(Step.allCases.count - 1)
+    }
+
+    // MARK: Navigation
+
+    private func advance() {
+        if step == .wake {
+            finish()
+        } else if let next = Step(rawValue: step.rawValue + 1) {
+            step = next
+        }
+    }
+
+    private func goBack() {
+        if let previous = Step(rawValue: step.rawValue - 1) {
+            step = previous
+        }
+    }
+
+    private func finish() {
+        store.completeOnboarding(
+            name: name.trimmingCharacters(in: .whitespaces),
+            identity: identity.trimmingCharacters(in: .whitespaces).isEmpty
+                ? "someone who follows through"
+                : identity.trimmingCharacters(in: .whitespaces),
+            interests: Array(interests),
+            templates: Array(selectedTemplates)
+        )
+        var config = store.wake
+        let calendar = Calendar.current
+        config.hour = calendar.component(.hour, from: wakeTime)
+        config.minute = calendar.component(.minute, from: wakeTime)
+        config.days = wakeDays
+        config.enabled = wakeAlarm
+        store.wake = config
+        store.updateWakeSchedule()
+    }
+
+    // MARK: Step header helper
+
+    private func stepHeader(_ title: String, _ subtitle: String) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(title.uppercased())
+                .font(.flexDisplay(34))
+                .foregroundStyle(Theme.ink)
+                .fixedSize(horizontal: false, vertical: true)
+            Text(subtitle)
+                .font(.flexBody())
+                .foregroundStyle(Theme.inkSubtle)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    // MARK: Steps
+
+    private var welcomeStep: some View {
+        VStack(alignment: .leading, spacing: 24) {
+            Spacer(minLength: 30)
             Image(systemName: "arrow.up.right.circle.fill")
-                .font(.system(size: 52))
+                .font(.system(size: 54))
                 .foregroundStyle(Theme.accent)
             Text("FLEXUP")
-                .font(.flexDisplay(48))
+                .font(.flexDisplay(52))
                 .foregroundStyle(Theme.ink)
-            Text("The operating system for becoming the person you want to be.".uppercased())
+            Text("THE OPERATING SYSTEM FOR BECOMING THE PERSON YOU WANT TO BE.")
                 .font(.flexMono(13))
                 .tracking(2)
                 .foregroundStyle(Theme.inkSubtle)
-                .lineSpacing(5)
-            VStack(alignment: .leading, spacing: 12) {
-                principle("You don't need more motivation. You need a better system.")
-                principle("Relationships motivate more than notifications.")
-                principle("Consistency beats intensity.")
-                principle("The app exists to get you off your phone.")
-            }
-            .padding(.top, 8)
-        }
-    }
+                .lineSpacing(6)
 
-    private func principle(_ text: String) -> some View {
-        HStack(alignment: .top, spacing: 10) {
-            Image(systemName: "checkmark")
-                .font(.system(size: 13, weight: .bold))
-                .foregroundStyle(Theme.accent)
-                .padding(.top, 3)
-            Text(text)
+            HStack(spacing: 12) {
+                pillarBadge("sunrise.fill", "Wake")
+                pillarBadge("figure.run", "Run")
+                pillarBadge("dumbbell", "Gym")
+                pillarBadge("fork.knife", "Diet")
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.top, 8)
+
+            Text("Four pillars. One streak at a time. No feeds, no noise — the app exists to get you off your phone.")
                 .font(.flexBody())
                 .foregroundStyle(Theme.inkSubtle)
         }
     }
 
-    // MARK: Step 1 — Identity
+    private func pillarBadge(_ icon: String, _ label: String) -> some View {
+        VStack(spacing: 8) {
+            ZStack {
+                Circle()
+                    .fill(Theme.ink)
+                    .frame(width: 52, height: 52)
+                Image(systemName: icon)
+                    .font(.system(size: 20, weight: .semibold))
+                    .foregroundStyle(Theme.background)
+            }
+            Text(label.uppercased())
+                .font(.flexMono(9))
+                .tracking(1)
+                .foregroundStyle(Theme.inkSubtle)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private var nameStep: some View {
+        VStack(alignment: .leading, spacing: 24) {
+            stepHeader("What should we call you?", "First name is fine. It's how the app talks to you.")
+            TextField("Your name", text: $name)
+                .font(.flexDisplay(26))
+                .foregroundStyle(Theme.ink)
+                .padding(18)
+                .background(Theme.card)
+                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        }
+    }
 
     private var identityStep: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            Text("Who are you becoming?")
-                .font(.flexTitle())
-                .foregroundStyle(Theme.ink)
-            Text("FlexUp is built around identity, not streaks for their own sake. Progress matters more than perfection.")
-                .font(.flexBody())
-                .foregroundStyle(Theme.inkSubtle)
+        VStack(alignment: .leading, spacing: 24) {
+            stepHeader("Who are you becoming?", "FlexUp is built around identity, not streaks for their own sake. Skip it if you're not sure yet.")
 
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Your name")
-                    .font(.flexCaption())
-                    .foregroundStyle(Theme.inkSubtle)
-                TextField("Name", text: $name)
+            HStack(spacing: 0) {
+                Text("I'm becoming ")
                     .font(.flexBodyBold())
-                    .padding(14)
-                    .background(Theme.card)
-                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-            }
-
-            VStack(alignment: .leading, spacing: 8) {
-                Text("I'm becoming…")
-                    .font(.flexCaption())
                     .foregroundStyle(Theme.inkSubtle)
                 TextField("a runner", text: $identity)
                     .font(.flexBodyBold())
-                    .padding(14)
-                    .background(Theme.card)
-                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-
-                FlowChips(items: identitySuggestions, selected: identity) { suggestion in
-                    identity = suggestion
-                }
+                    .foregroundStyle(Theme.ink)
             }
-        }
-    }
+            .padding(18)
+            .background(Theme.card)
+            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
 
-    // MARK: Step 2 — Interests & starter habits
-
-    private var habitsStep: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            Text("Pick your first commitments")
-                .font(.flexTitle())
-                .foregroundStyle(Theme.ink)
-            Text("Choose what you care about, then two or three small habits. Small and repeated wins.")
-                .font(.flexBody())
-                .foregroundStyle(Theme.inkSubtle)
-
-            SectionHeader(title: "Interests")
-            FlowLayoutChips {
-                ForEach(ActivityCategory.allCases) { category in
-                    SelectableChip(
-                        label: category.label,
-                        icon: category.icon,
-                        isSelected: interests.contains(category)
-                    ) {
-                        if interests.contains(category) {
-                            interests.remove(category)
-                        } else {
-                            interests.insert(category)
+            ScrollView(.horizontal) {
+                HStack(spacing: 8) {
+                    ForEach(identitySuggestions, id: \.self) { suggestion in
+                        SelectableChip(label: suggestion, isSelected: identity == suggestion) {
+                            identity = suggestion
                         }
                     }
                 }
             }
+            .scrollIndicators(.hidden)
+        }
+    }
 
-            SectionHeader(title: "Starter habits", subtitle: "Tap to add — start with 2 or 3.")
+    private var interestsStep: some View {
+        VStack(alignment: .leading, spacing: 24) {
+            stepHeader("Pick your focus", "Choose what you care about — it shapes your starter habits.")
+            LazyVGrid(columns: interestColumns, spacing: 10) {
+                ForEach(ActivityCategory.allCases) { category in
+                    interestCard(category)
+                }
+            }
+        }
+    }
+
+    private func interestCard(_ category: ActivityCategory) -> some View {
+        let isSelected = interests.contains(category)
+        return Button {
+            if isSelected {
+                interests.remove(category)
+            } else {
+                interests.insert(category)
+            }
+        } label: {
+            VStack(spacing: 10) {
+                Image(systemName: category.icon)
+                    .font(.system(size: 24, weight: .semibold))
+                Text(category.label.uppercased())
+                    .font(.flexMono(11))
+                    .tracking(1)
+            }
+            .foregroundStyle(isSelected ? Theme.background : Theme.ink)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 22)
+            .background(isSelected ? Theme.ink : Theme.card)
+            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var habitsStep: some View {
+        VStack(alignment: .leading, spacing: 24) {
+            stepHeader("Start small", "Pick two or three. Small and repeated beats big and abandoned.")
             VStack(spacing: 10) {
                 ForEach(suggestedTemplates) { template in
                     templateRow(template)
@@ -188,13 +323,14 @@ struct OnboardingView: View {
             }
         } label: {
             HStack(spacing: 12) {
-                IconBadge(systemName: template.category.icon, size: 38)
-                VStack(alignment: .leading, spacing: 2) {
+                IconBadge(systemName: template.category.icon, size: 40)
+                VStack(alignment: .leading, spacing: 3) {
                     Text(template.title)
                         .font(.flexBodyBold())
                         .foregroundStyle(Theme.ink)
-                    Text("\(template.weekdays.count)× a week · \(template.timeOfDay.label) · \(template.durationMinutes) min")
-                        .font(.flexCaption())
+                    Text("\(template.weekdays.count)×/WEEK · \(template.timeOfDay.label.uppercased()) · \(template.durationMinutes) MIN")
+                        .font(.flexMono(9))
+                        .tracking(1)
                         .foregroundStyle(Theme.inkSubtle)
                 }
                 Spacer()
@@ -202,53 +338,68 @@ struct OnboardingView: View {
                     .font(.title3)
                     .foregroundStyle(isSelected ? Theme.accent : Theme.inkSubtle)
             }
-            .padding(12)
+            .padding(14)
             .background(Theme.card)
-            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
             .overlay(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
                     .stroke(isSelected ? Theme.accent : .clear, lineWidth: 1.5)
             )
         }
         .buttonStyle(.plain)
     }
-}
 
-// MARK: - Small chip helpers
+    private var wakeStep: some View {
+        VStack(alignment: .leading, spacing: 24) {
+            stepHeader("When will you wake up?", "Win the morning first. No snoozing, no backup alarms.")
 
-/// Single-row wrapping chips for short suggestion lists.
-private struct FlowChips: View {
-    let items: [String]
-    let selected: String
-    let onTap: (String) -> Void
+            DatePicker("Wake time", selection: $wakeTime, displayedComponents: .hourAndMinute)
+                .datePickerStyle(.wheel)
+                .labelsHidden()
+                .frame(maxWidth: .infinity)
 
-    var body: some View {
-        ScrollView(.horizontal) {
-            HStack(spacing: 8) {
-                ForEach(items, id: \.self) { item in
-                    SelectableChip(label: item, isSelected: selected == item) {
-                        onTap(item)
+            VStack(alignment: .leading, spacing: 10) {
+                Text("REPEAT ON")
+                    .font(.flexMono(10))
+                    .tracking(2)
+                    .foregroundStyle(Theme.inkSubtle)
+                HStack(spacing: 8) {
+                    ForEach(1...7, id: \.self) { weekday in
+                        Button {
+                            if wakeDays.contains(weekday) {
+                                wakeDays.remove(weekday)
+                            } else {
+                                wakeDays.insert(weekday)
+                            }
+                        } label: {
+                            Text(dayLetters[weekday - 1])
+                                .font(.flexMono(13))
+                                .foregroundStyle(wakeDays.contains(weekday) ? Theme.background : Theme.inkSubtle)
+                                .frame(maxWidth: .infinity)
+                                .frame(height: 42)
+                                .background(wakeDays.contains(weekday) ? Theme.ink : Theme.card)
+                                .clipShape(Circle())
+                        }
+                        .buttonStyle(.plain)
                     }
                 }
             }
+
+            Toggle(isOn: $wakeAlarm) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Alarm notification")
+                        .font(.flexBodyBold())
+                        .foregroundStyle(Theme.ink)
+                    Text("Fires at your wake time on these days.")
+                        .font(.flexCaption())
+                        .foregroundStyle(Theme.inkSubtle)
+                }
+            }
+            .tint(Theme.accent)
+            .padding(14)
+            .background(Theme.card)
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         }
-        .scrollIndicators(.hidden)
-    }
-}
-
-/// Simple wrap substitute: horizontal scroll keeps layout dependable.
-private struct FlowLayoutChips<Content: View>: View {
-    private let content: Content
-
-    init(@ViewBuilder content: () -> Content) {
-        self.content = content()
-    }
-
-    var body: some View {
-        ScrollView(.horizontal) {
-            HStack(spacing: 8) { content }
-        }
-        .scrollIndicators(.hidden)
     }
 }
 

@@ -124,11 +124,8 @@ struct FuelSection: View {
                 } else {
                     ForEach(entries) { entry in
                         HStack {
-                            if let fileName = entry.photoFileName,
-                               let image = UIImage(contentsOfFile: store.imageURL(fileName: fileName).path) {
-                                Image(uiImage: image)
-                                    .resizable()
-                                    .scaledToFill()
+                            if let fileName = entry.photoFileName {
+                                AsyncPhotoView(url: store.imageURL(fileName: fileName), maxPixel: 100)
                                     .frame(width: 34, height: 34)
                                     .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
                             }
@@ -343,13 +340,13 @@ struct AddFoodSheet: View {
         .presentationDetents([.large])
         .fullScreenCover(isPresented: $showCamera) {
             CameraPicker { image in
-                photoData = image.jpegData(compressionQuality: 0.8)
+                photoData = image.flexJPEGData()
             }
             .ignoresSafeArea()
         }
         .sheet(isPresented: $showLibrary) {
             LibraryPicker { image in
-                photoData = image.jpegData(compressionQuality: 0.8)
+                photoData = image.flexJPEGData()
             }
         }
         .sheet(isPresented: $showKeyEntry) {

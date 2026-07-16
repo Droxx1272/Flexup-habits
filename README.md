@@ -43,9 +43,15 @@ Four pillars plus the proof — one tab each, nothing buried:
 
 Discover, Squad (social feed + memories), Calendar, Activity detail, and the coach remain in the codebase but out of the nav — the navigation stays simple until the pillars are solid.
 
+## Login & onboarding
+
+- **Sign in with Apple** (primary; requires the Sign In with Apple capability + a paid Apple Developer account) with an on-device **email account** fallback. Accounts gate the app; sign-out lives in Stats. Data stays on device in v1 — a backend later adds verification and sync.
+- Onboarding is one question per screen (progress bar, back arrow, big type): name → identity → focus areas → starter habits → wake-up time, so day one starts tomorrow morning.
+
 ## Architecture
 
 - **SwiftUI + Observation** (`@Observable`), iOS 17+, zero third-party dependencies.
+- **Performance**: photos decode as async, cached, downsampled thumbnails (ImageIO) — never full-resolution on the main thread; captures are capped at 1600px; persistence is debounced and encodes/writes off the main thread.
 - `AppStore` is the single source of truth: all state, all actions, the scheduling engine (habits → materialized commitments), the achievement unlock rules, and the rule-based coach live there. Views never mutate state directly.
 - Persistence is a JSON snapshot in Application Support — deliberately boring, and isolated so it can be swapped for a synced backend without touching views.
 - The coach is rule-based in v1 (inactivity restarts, skipped-weekday detection, friend-activity nudges). Its interface (`CoachInsight` with an optional action) is what a model-backed coach will plug into.

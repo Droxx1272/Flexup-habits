@@ -127,7 +127,7 @@ struct CommitmentDetailSheet: View {
     /// BeReal-style check-in: the photo is the completion. Proof shots land
     /// in Track → Photos under "Check-in".
     private func completeWithProof(_ image: UIImage) {
-        if let data = image.jpegData(compressionQuality: 0.85) {
+        if let data = image.flexJPEGData() {
             store.addProgressPhoto(imageData: data, pose: .proof)
         }
         store.complete(live)
