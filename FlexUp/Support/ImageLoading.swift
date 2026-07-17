@@ -26,7 +26,7 @@ enum ImageLoader {
                     kCGImageSourceThumbnailMaxPixelSize: maxPixel,
                     kCGImageSourceShouldCacheImmediately: true,
                 ]
-                guard let source = CGImageSourceCreateImageSource(url as CFURL, nil),
+                guard let source = CGImageSourceCreateWithURL(url as CFURL, nil),
                       let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else {
                     continuation.resume(returning: nil)
                     return
