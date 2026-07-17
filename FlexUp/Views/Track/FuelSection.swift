@@ -414,7 +414,7 @@ struct APIKeySheet: View {
                 .tracking(2)
                 .foregroundStyle(Theme.ink)
 
-            Text("Paste an Anthropic API key (console.anthropic.com → API Keys). It's stored only on this phone and each estimate costs about a cent.")
+            Text("Paste an Anthropic API key (console.anthropic.com → API Keys). It's stored only on this phone and each estimate costs a fraction of a cent.")
                 .font(.flexCaption())
                 .foregroundStyle(Theme.inkSubtle)
                 .multilineTextAlignment(.center)

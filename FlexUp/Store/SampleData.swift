@@ -245,6 +245,9 @@ enum SampleData {
         Achievement(key: "ton_lifted", title: "The Ton", detail: "Lift 1,000 kg of volume in one session.", category: .milestones, icon: "scalemass.fill"),
         Achievement(key: "first_photo", title: "Day One", detail: "Take your first progress photo.", category: .firsts, icon: "camera.fill"),
         Achievement(key: "host", title: "Host", detail: "Organize an activity for others.", category: .leadership, icon: "megaphone.fill"),
+        Achievement(key: "first_sleep", title: "First Night", detail: "Log your first night's sleep.", category: .firsts, icon: "moon.stars.fill"),
+        Achievement(key: "full_battery", title: "Full Battery", detail: "Log 8+ hours of sleep in one night.", category: .milestones, icon: "battery.100percent"),
+        Achievement(key: "sleep_week", title: "Well Rested Week", detail: "Log sleep 7 nights in a row.", category: .consistency, icon: "moon.zzz.fill"),
     ]
 
     static let completionTitles: [String] = [

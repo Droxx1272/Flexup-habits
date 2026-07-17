@@ -1,12 +1,22 @@
 import SwiftUI
 import UIKit
 
-/// The morning pillar. Set a wake time, get the alarm, check in when you're
-/// up — optionally with a photo of the sky. No snoozing. No backup alarms.
+/// The morning pillar: wake alarm + check-in, and the night pillar right
+/// beside it: bedtime reminder + sleep log. Win the morning, protect the
+/// night — one screen, one toggle.
 struct WakeView: View {
+    enum Section: String, CaseIterable, Identifiable {
+        case wake = "Wake"
+        case sleep = "Sleep"
+        var id: String { rawValue }
+    }
+
     @Environment(AppStore.self) private var store
+    @State private var section: Section = .wake
     @State private var showSetup = false
     @State private var showProofCamera = false
+    @State private var showBedtimeSetup = false
+    @State private var showLogSleep = false
 
     private let calendar = Calendar.current
 
@@ -15,9 +25,18 @@ struct WakeView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
                     ScreenHeader(title: "Wake", tagline: "Win the morning first.")
-                    heroCard
-                    checkInCard
-                    streakCard
+                    SegmentPills(items: Section.allCases, selection: $section)
+
+                    switch section {
+                    case .wake:
+                        heroCard
+                        checkInCard
+                        streakCard
+                    case .sleep:
+                        bedtimeCard
+                        logSleepCard
+                        sleepHistoryCard
+                    }
                 }
                 .padding(.horizontal, 20)
                 .padding(.bottom, 24)
@@ -27,6 +46,12 @@ struct WakeView: View {
             .toolbar(.hidden, for: .navigationBar)
             .sheet(isPresented: $showSetup) {
                 WakeSetupSheet()
+            }
+            .sheet(isPresented: $showBedtimeSetup) {
+                BedtimeSetupSheet()
+            }
+            .sheet(isPresented: $showLogSleep) {
+                LogSleepSheet()
             }
             .fullScreenCover(isPresented: $showProofCamera) {
                 CameraPicker { image in
@@ -214,6 +239,111 @@ struct WakeView: View {
         let parts = calendar.dateComponents([.year, .month, .day], from: date)
         return "\(parts.year ?? 0)-\(parts.month ?? 0)-\(parts.day ?? 0)"
     }
+
+    // MARK: Bedtime
+
+    private var bedtimeCard: some View {
+        FlexCard {
+            VStack(alignment: .leading, spacing: 12) {
+                Text(store.bedtime.enabled ? "TONIGHT, WIND DOWN AT" : "PICK YOUR BEDTIME")
+                    .font(.flexMono(11))
+                    .tracking(2)
+                    .foregroundStyle(Theme.inkSubtle)
+
+                Text(store.bedtime.timeLabel)
+                    .font(.flexDisplay(58))
+                    .foregroundStyle(Theme.ink)
+                    .minimumScaleFactor(0.5)
+                    .lineLimit(1)
+
+                Text("A consistent bedtime is what makes the wake-up easy.")
+                    .font(.flexCaption())
+                    .foregroundStyle(Theme.inkSubtle)
+
+                Button(store.bedtime.enabled ? "Edit bedtime" : "Set bedtime") {
+                    showBedtimeSetup = true
+                }
+                .buttonStyle(store.bedtime.enabled ? SecondaryButtonStyle() : SecondaryButtonStyle(tint: Theme.background, background: Theme.ink))
+            }
+        }
+    }
+
+    // MARK: Log sleep
+
+    private var logSleepCard: some View {
+        VStack(spacing: 10) {
+            Button {
+                showLogSleep = true
+            } label: {
+                HStack(spacing: 10) {
+                    Image(systemName: "moon.stars")
+                    Text("Log last night's sleep")
+                }
+            }
+            .buttonStyle(PrimaryButtonStyle())
+
+            HStack(spacing: 10) {
+                TrackStat(value: lastNightLabel, label: "Last night")
+                TrackStat(value: averageLabel, label: "7-day avg")
+                TrackStat(value: "\(store.sleepLogStreak)", label: "Night streak")
+            }
+        }
+    }
+
+    private var lastNightLabel: String {
+        guard let last = store.lastNightSleep else { return "—" }
+        return String(format: "%.1fh", last.hours)
+    }
+
+    private var averageLabel: String {
+        guard let average = store.averageSleepHours() else { return "—" }
+        return String(format: "%.1fh", average)
+    }
+
+    // MARK: Sleep history
+
+    private var sleepHistoryCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            SectionHeader(title: "History", subtitle: store.sleepSessions.isEmpty ? nil : "Most recent first.")
+            if store.sleepSessions.isEmpty {
+                EmptyStateCard(
+                    icon: "moon.zzz",
+                    title: "No nights logged yet",
+                    message: "Log tonight's sleep tomorrow morning — even a rough estimate builds the picture."
+                )
+            } else {
+                ForEach(store.sleepSessions.sorted { $0.wakeTime > $1.wakeTime }) { session in
+                    sleepRow(session)
+                }
+            }
+        }
+    }
+
+    private func sleepRow(_ session: SleepSession) -> some View {
+        FlexCard(padding: 14) {
+            HStack(spacing: 14) {
+                IconBadge(systemName: "moon.stars.fill", tint: Theme.amber, size: 42)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(session.durationLabel)
+                        .font(.flexStat(18))
+                        .foregroundStyle(Theme.ink)
+                    Text(session.wakeTime.formatted(.dateTime.weekday(.abbreviated).day().month()).uppercased())
+                        .font(.flexMono(9))
+                        .tracking(1)
+                        .foregroundStyle(Theme.inkSubtle)
+                }
+                Spacer()
+                VStack(alignment: .trailing, spacing: 3) {
+                    Text(session.quality.emoji)
+                        .font(.system(size: 20))
+                    Text(session.quality.label.uppercased())
+                        .font(.flexMono(9))
+                        .tracking(1)
+                        .foregroundStyle(Theme.inkSubtle)
+                }
+            }
+        }
+    }
 }
 
 // MARK: - Setup sheet
@@ -309,6 +439,218 @@ struct WakeSetupSheet: View {
             // choice once the feature has been used.
             enabled = store.wake.enabled || store.wakeCheckInDays.isEmpty
         }
+    }
+}
+
+// MARK: - Bedtime setup sheet
+
+struct BedtimeSetupSheet: View {
+    @Environment(AppStore.self) private var store
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var time = Date.now
+    @State private var days: Set<Int> = [1, 2, 3, 4, 5, 6, 7]
+    @State private var enabled = true
+
+    private let calendar = Calendar.current
+    private let dayLetters = ["S", "M", "T", "W", "T", "F", "S"]
+
+    var body: some View {
+        VStack(spacing: 18) {
+            Capsule()
+                .fill(Theme.inkSubtle.opacity(0.3))
+                .frame(width: 36, height: 5)
+                .padding(.top, 10)
+
+            Text("BEDTIME")
+                .font(.flexMono(12))
+                .tracking(2)
+                .foregroundStyle(Theme.ink)
+
+            DatePicker("Time", selection: $time, displayedComponents: .hourAndMinute)
+                .datePickerStyle(.wheel)
+                .labelsHidden()
+
+            VStack(spacing: 8) {
+                Text("REPEAT ON")
+                    .font(.flexMono(10))
+                    .tracking(2)
+                    .foregroundStyle(Theme.inkSubtle)
+                HStack(spacing: 8) {
+                    ForEach(1...7, id: \.self) { weekday in
+                        Button {
+                            if days.contains(weekday) { days.remove(weekday) } else { days.insert(weekday) }
+                        } label: {
+                            Text(dayLetters[weekday - 1])
+                                .font(.flexMono(13))
+                                .foregroundStyle(days.contains(weekday) ? Theme.background : Theme.inkSubtle)
+                                .frame(width: 38, height: 38)
+                                .background(days.contains(weekday) ? Theme.ink : Theme.card)
+                                .clipShape(Circle())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+
+            Toggle(isOn: $enabled) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Wind-down reminder")
+                        .font(.flexBodyBold())
+                        .foregroundStyle(Theme.ink)
+                    Text("Fires at your bedtime on scheduled days.")
+                        .font(.flexCaption())
+                        .foregroundStyle(Theme.inkSubtle)
+                }
+            }
+            .tint(Theme.accent)
+            .padding(14)
+            .background(Theme.card)
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+
+            Spacer()
+
+            Button("Save bedtime") {
+                var config = store.bedtime
+                config.hour = calendar.component(.hour, from: time)
+                config.minute = calendar.component(.minute, from: time)
+                config.days = days
+                config.enabled = enabled
+                store.bedtime = config
+                store.updateBedtimeSchedule()
+                dismiss()
+            }
+            .buttonStyle(PrimaryButtonStyle())
+            .disabled(days.isEmpty)
+            .opacity(days.isEmpty ? 0.4 : 1)
+        }
+        .padding(.horizontal, 20)
+        .padding(.bottom, 12)
+        .background(Theme.background)
+        .presentationDetents([.large])
+        .onAppear {
+            time = store.bedtime.timeToday
+            days = store.bedtime.days
+            enabled = store.bedtime.enabled || store.sleepSessions.isEmpty
+        }
+    }
+}
+
+// MARK: - Log sleep sheet
+
+struct LogSleepSheet: View {
+    @Environment(AppStore.self) private var store
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var bedtimeDate = Date.now
+    @State private var wakeDate = Date.now
+    @State private var quality: SleepQuality = .good
+
+    private var duration: TimeInterval {
+        max(0, wakeDate.timeIntervalSince(bedtimeDate))
+    }
+
+    private var durationLabel: String {
+        let totalMinutes = Int(duration / 60)
+        return "\(totalMinutes / 60)h \(totalMinutes % 60)m"
+    }
+
+    var body: some View {
+        VStack(spacing: 18) {
+            Capsule()
+                .fill(Theme.inkSubtle.opacity(0.3))
+                .frame(width: 36, height: 5)
+                .padding(.top, 10)
+
+            Text("LOG LAST NIGHT")
+                .font(.flexMono(12))
+                .tracking(2)
+                .foregroundStyle(Theme.ink)
+
+            Text(durationLabel)
+                .font(.flexDisplay(40))
+                .foregroundStyle(Theme.ink)
+
+            HStack(spacing: 10) {
+                VStack(spacing: 6) {
+                    Text("BEDTIME")
+                        .font(.flexMono(9))
+                        .tracking(1)
+                        .foregroundStyle(Theme.inkSubtle)
+                    DatePicker("Bedtime", selection: $bedtimeDate, displayedComponents: [.date, .hourAndMinute])
+                        .labelsHidden()
+                        .datePickerStyle(.compact)
+                }
+                .frame(maxWidth: .infinity)
+
+                VStack(spacing: 6) {
+                    Text("WAKE TIME")
+                        .font(.flexMono(9))
+                        .tracking(1)
+                        .foregroundStyle(Theme.inkSubtle)
+                    DatePicker("Wake time", selection: $wakeDate, displayedComponents: [.date, .hourAndMinute])
+                        .labelsHidden()
+                        .datePickerStyle(.compact)
+                }
+                .frame(maxWidth: .infinity)
+            }
+            .padding(14)
+            .background(Theme.card)
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text("HOW DID YOU SLEEP?")
+                    .font(.flexMono(10))
+                    .tracking(2)
+                    .foregroundStyle(Theme.inkSubtle)
+                HStack(spacing: 8) {
+                    ForEach(SleepQuality.allCases) { option in
+                        qualityChip(option)
+                    }
+                }
+            }
+
+            Spacer()
+
+            Button("Save") {
+                store.logSleep(bedtime: bedtimeDate, wakeTime: wakeDate, quality: quality)
+                dismiss()
+            }
+            .buttonStyle(PrimaryButtonStyle())
+            .disabled(duration <= 0)
+            .opacity(duration > 0 ? 1 : 0.4)
+        }
+        .padding(.horizontal, 20)
+        .padding(.bottom, 12)
+        .background(Theme.background)
+        .presentationDetents([.large])
+        .onAppear {
+            let calendar = Calendar.current
+            let defaultWake = store.wake.timeToday
+            wakeDate = defaultWake
+            bedtimeDate = calendar.date(byAdding: .day, value: -1, to: store.bedtime.timeToday) ?? defaultWake.addingTimeInterval(-8 * 3600)
+        }
+    }
+
+    private func qualityChip(_ option: SleepQuality) -> some View {
+        let isSelected = quality == option
+        return Button {
+            quality = option
+        } label: {
+            VStack(spacing: 6) {
+                Text(option.emoji)
+                    .font(.system(size: 22))
+                Text(option.label.uppercased())
+                    .font(.flexMono(9))
+                    .tracking(1)
+            }
+            .foregroundStyle(isSelected ? Theme.background : Theme.ink)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 12)
+            .background(isSelected ? Theme.ink : Theme.card)
+            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        }
+        .buttonStyle(.plain)
     }
 }
 

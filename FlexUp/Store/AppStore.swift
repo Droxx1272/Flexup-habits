@@ -25,6 +25,8 @@ final class AppStore {
     var calorieBudget: Int = 2200
     var wake = WakeConfig()
     var wakeCheckInDays: Set<String> = []
+    var bedtime = BedtimeConfig()
+    var sleepSessions: [SleepSession] = []
     var socialEvents: [SocialEvent] = []
     var moodByDay: [String: String] = [:]
     var chats: [UUID: [ChatMessage]] = [:]
@@ -498,6 +500,88 @@ final class AppStore {
         }
     }
 
+    // MARK: - Sleep
+
+    var lastNightSleep: SleepSession? {
+        sleepSessions.max { $0.wakeTime < $1.wakeTime }
+    }
+
+    /// Average hours across the most recent `nights` logged sessions.
+    func averageSleepHours(nights: Int = 7) -> Double? {
+        let recent = sleepSessions
+            .sorted { $0.wakeTime > $1.wakeTime }
+            .prefix(nights)
+        guard !recent.isEmpty else { return nil }
+        return recent.reduce(0) { $0 + $1.hours } / Double(recent.count)
+    }
+
+    /// Consecutive days with a logged night, counting back from the most
+    /// recent session's wake date.
+    var sleepLogStreak: Int {
+        let days = Set(sleepSessions.map { dayKey($0.wakeTime) })
+        guard !days.isEmpty else { return 0 }
+        var streak = 0
+        var offset = days.contains(dayKey()) ? 0 : 1
+        while offset < 366 {
+            guard let day = calendar.date(byAdding: .day, value: -offset, to: .now) else { break }
+            if days.contains(dayKey(day)) {
+                streak += 1
+                offset += 1
+            } else {
+                break
+            }
+        }
+        return streak
+    }
+
+    /// Log a night's sleep. Awards achievements and celebrates the streak.
+    func logSleep(bedtime: Date, wakeTime: Date, quality: SleepQuality) {
+        let session = SleepSession(bedtime: bedtime, wakeTime: wakeTime, quality: quality)
+        sleepSessions.append(session)
+
+        var unlocked: [Achievement] = []
+        if let a = unlock("first_sleep") { unlocked.append(a) }
+        if session.hours >= 8, let a = unlock("full_battery") { unlocked.append(a) }
+        if sleepLogStreak >= 7, let a = unlock("sleep_week") { unlocked.append(a) }
+
+        let hours = Int(session.hours)
+        let minutes = Int((session.hours - Double(hours)) * 60)
+        celebration = Celebration(
+            title: "Night logged.",
+            message: "\(hours)h \(minutes)m of sleep, \(quality.label.lowercased()) quality. Rest is training too.",
+            streak: sleepLogStreak > 1 ? sleepLogStreak : nil,
+            achievement: unlocked.first
+        )
+        save()
+    }
+
+    /// Re-sync the repeating bedtime reminder with the current config.
+    func updateBedtimeSchedule() {
+        let center = UNUserNotificationCenter.current()
+        center.removePendingNotificationRequests(withIdentifiers: (1...7).map { "bedtime-\($0)" })
+        save()
+        guard bedtime.enabled else { return }
+
+        center.requestAuthorization(options: [.alert, .sound]) { [weak self] granted, _ in
+            guard granted, let self else { return }
+            let config = self.bedtime
+            for weekday in config.days {
+                var components = DateComponents()
+                components.weekday = weekday
+                components.hour = config.hour
+                components.minute = config.minute
+
+                let content = UNMutableNotificationContent()
+                content.title = "Wind down."
+                content.body = "Bedtime, so tomorrow's wake-up doesn't hurt."
+                content.sound = .default
+
+                let trigger = UNCalendarNotificationTrigger(dateMatching: components, repeats: true)
+                center.add(UNNotificationRequest(identifier: "bedtime-\(weekday)", content: content, trigger: trigger))
+            }
+        }
+    }
+
     // MARK: - Progress photos
 
     private var photosDirectory: URL {
@@ -621,6 +705,16 @@ final class AppStore {
                 subtitle: "\(Int(workout.totalVolumeKg)) kg · \(workout.totalSets) sets",
                 icon: "dumbbell",
                 date: workout.date
+            ))
+        }
+
+        for session in sleepSessions {
+            items.append(Memory(
+                id: "sleep-\(session.id)",
+                title: "\(session.durationLabel) sleep",
+                subtitle: "\(session.quality.emoji) \(session.quality.label) quality",
+                icon: "moon.stars",
+                date: session.wakeTime
             ))
         }
 
@@ -840,6 +934,8 @@ final class AppStore {
         var calorieBudget: Int?
         var wake: WakeConfig?
         var wakeCheckInDays: Set<String>?
+        var bedtime: BedtimeConfig?
+        var sleepSessions: [SleepSession]?
         var socialEvents: [SocialEvent]?
         var moodByDay: [String: String]
         var chats: [UUID: [ChatMessage]]
@@ -874,6 +970,8 @@ final class AppStore {
             calorieBudget: calorieBudget,
             wake: wake,
             wakeCheckInDays: wakeCheckInDays,
+            bedtime: bedtime,
+            sleepSessions: sleepSessions,
             socialEvents: socialEvents,
             moodByDay: moodByDay,
             chats: chats
@@ -912,6 +1010,8 @@ final class AppStore {
         calorieBudget = snapshot.calorieBudget ?? 2200
         wake = snapshot.wake ?? WakeConfig()
         wakeCheckInDays = snapshot.wakeCheckInDays ?? []
+        bedtime = snapshot.bedtime ?? BedtimeConfig()
+        sleepSessions = snapshot.sleepSessions ?? []
         socialEvents = snapshot.socialEvents ?? []
         moodByDay = snapshot.moodByDay
         chats = snapshot.chats

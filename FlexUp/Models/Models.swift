@@ -241,6 +241,70 @@ struct WakeConfig: Codable, Hashable {
     }
 }
 
+// MARK: - Sleep (nights)
+
+struct BedtimeConfig: Codable, Hashable {
+    var hour = 22
+    var minute = 30
+    /// Calendar weekdays (1 = Sunday … 7 = Saturday) the reminder applies to.
+    var days: Set<Int> = [1, 2, 3, 4, 5, 6, 7]
+    var enabled = false
+
+    var timeToday: Date {
+        Calendar.current.date(bySettingHour: hour, minute: minute, second: 0, of: .now) ?? .now
+    }
+
+    var timeLabel: String {
+        timeToday.formatted(date: .omitted, time: .shortened)
+    }
+}
+
+enum SleepQuality: Int, Codable, CaseIterable, Identifiable {
+    case poor = 1
+    case fair = 2
+    case good = 3
+    case great = 4
+
+    var id: Int { rawValue }
+
+    var label: String {
+        switch self {
+        case .poor: "Poor"
+        case .fair: "Fair"
+        case .good: "Good"
+        case .great: "Great"
+        }
+    }
+
+    var emoji: String {
+        switch self {
+        case .poor: "😩"
+        case .fair: "😐"
+        case .good: "🙂"
+        case .great: "😴"
+        }
+    }
+}
+
+enum SleepGoal {
+    static let targetHours = 8.0
+}
+
+struct SleepSession: Identifiable, Codable, Hashable {
+    var id = UUID()
+    var bedtime: Date
+    var wakeTime: Date
+    var quality: SleepQuality
+
+    var duration: TimeInterval { max(0, wakeTime.timeIntervalSince(bedtime)) }
+    var hours: Double { duration / 3600 }
+
+    var durationLabel: String {
+        let totalMinutes = Int(duration / 60)
+        return "\(totalMinutes / 60)h \(totalMinutes % 60)m"
+    }
+}
+
 // MARK: - Fuel (calorie tracking)
 
 enum MealType: String, Codable, CaseIterable, Identifiable {

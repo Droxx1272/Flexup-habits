@@ -42,8 +42,11 @@ enum CalorieEstimatorError: LocalizedError {
 
 enum CalorieEstimator {
 
-    /// Change to "claude-haiku-4-5" for cheaper (less accurate) estimates.
-    private static let model = "claude-opus-4-8"
+    /// Haiku 4.5 keeps per-photo cost near $0.002 (~5x cheaper than Opus)
+    /// with food identification and portion estimates that are good enough
+    /// for a calorie-awareness tool, not a lab scale. Swap back to
+    /// "claude-opus-4-8" if estimates trend inaccurate.
+    private static let model = "claude-haiku-4-5"
 
     private static let prompt = """
     Estimate the food in this photo for a calorie-tracking app. Identify \

@@ -35,10 +35,10 @@ Four pillars plus the proof — one tab each, nothing buried:
 
 | Tab | Purpose |
 | --- | --- |
-| **Wake** | Erly-style mornings: wake time with repeating alarm notification, morning check-in (photo of the sky counts), weekly streak strip. No snoozing, no backup alarms. |
+| **Wake** | Wake/Sleep toggle. **Wake**: Erly-style wake time with repeating alarm notification, morning check-in (photo of the sky counts), weekly streak strip. **Sleep**: bedtime reminder, log-last-night flow (bedtime/wake time pickers + quality rating), duration/quality history, 7-day average and night streak. No snoozing, no backup alarms. |
 | **Run** | GPS tracking (Strava-style): live route map while recording, time/distance/pace/elevation, per-km splits, and a run detail view with the route drawn, headline stats, and split pace bars. |
 | **Gym** | Training log (Hevy-style): live session with exercises, sets × kg × reps, per-exercise bests, volume stats, history. |
-| **Diet** | Calorie tracking (Lose It-style): daily budget ring, four meals, quick-add foods, and meal photos — snap the plate and let AI estimate the calories (Claude vision via the Anthropic API with structured JSON output; bring-your-own key in v1, backend proxy before release). |
+| **Diet** | Calorie tracking (Lose It-style): daily budget ring, four meals, quick-add foods, and meal photos — snap the plate and let AI estimate the calories (Claude Haiku 4.5 vision via the Anthropic API with structured JSON output, ~$0.002/photo; bring-your-own key in v1, backend proxy before release). |
 | **Stats** | The everything-view: today's progress, per-pillar streaks and totals, weekly consistency chart, progress photos with pose guides and then-vs-now comparison, achievements. |
 
 Discover, Squad (social feed + memories), Calendar, Activity detail, and the coach remain in the codebase but out of the nav — the navigation stays simple until the pillars are solid.
