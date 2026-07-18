@@ -229,60 +229,79 @@ struct AddFoodSheet: View {
                     .clipShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
             }
 
-            // Snap the plate — a photo makes the log honest, and AI can
-            // estimate the calories from it.
-            HStack(spacing: 10) {
-                if let photoData, let image = UIImage(data: photoData) {
-                    Image(uiImage: image)
-                        .resizable()
-                        .scaledToFill()
-                        .frame(width: 52, height: 52)
-                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                    Button {
-                        self.photoData = nil
-                        estimateNote = nil
-                        estimateError = nil
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .foregroundStyle(Theme.inkSubtle)
+            // The snap is the star of this sheet: a big capture tile, then
+            // the photo full-width with AI estimation underneath.
+            if let photoData, let image = UIImage(data: photoData) {
+                VStack(spacing: 10) {
+                    ZStack(alignment: .topTrailing) {
+                        Image(uiImage: image)
+                            .resizable()
+                            .scaledToFill()
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 170)
+                            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                        Button {
+                            self.photoData = nil
+                            estimateNote = nil
+                            estimateError = nil
+                        } label: {
+                            Image(systemName: "xmark")
+                                .font(.system(size: 12, weight: .bold))
+                                .foregroundStyle(Theme.ink)
+                                .padding(9)
+                                .background(.thinMaterial)
+                                .clipShape(Circle())
+                        }
+                        .padding(10)
                     }
-                    .buttonStyle(.plain)
+
                     Button {
                         runEstimate()
                     } label: {
-                        HStack(spacing: 6) {
+                        HStack(spacing: 8) {
                             if estimating {
                                 ProgressView()
                                     .controlSize(.small)
                             } else {
                                 Image(systemName: "sparkles")
                             }
-                            Text(estimating ? "Estimating…" : "Estimate with AI")
+                            Text(estimating ? "Estimating…" : "Estimate calories with AI")
                         }
-                        .font(.flexCaption())
-                        .foregroundStyle(Theme.accent)
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 10)
-                        .background(Theme.accentSoft)
-                        .clipShape(Capsule())
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(SecondaryButtonStyle(tint: Theme.accent, background: Theme.accentSoft))
                     .disabled(estimating)
-                } else {
-                    Button {
-                        if cameraAvailable { showCamera = true } else { showLibrary = true }
-                    } label: {
-                        Label("Snap your meal", systemImage: "camera")
-                            .font(.flexCaption())
-                            .foregroundStyle(Theme.accent)
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 10)
-                            .background(Theme.accentSoft)
-                            .clipShape(Capsule())
-                    }
-                    .buttonStyle(.plain)
                 }
-                Spacer()
+            } else {
+                Button {
+                    if cameraAvailable { showCamera = true } else { showLibrary = true }
+                } label: {
+                    VStack(spacing: 12) {
+                        ZStack {
+                            Circle()
+                                .fill(Theme.ink)
+                                .frame(width: 62, height: 62)
+                            Image(systemName: "camera.fill")
+                                .font(.system(size: 24, weight: .semibold))
+                                .foregroundStyle(Theme.background)
+                        }
+                        Text("SNAP YOUR MEAL")
+                            .font(.flexMono(13))
+                            .tracking(2)
+                            .foregroundStyle(Theme.ink)
+                        Text("AI estimates the calories for you")
+                            .font(.flexCaption())
+                            .foregroundStyle(Theme.inkSubtle)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 168)
+                    .background(Theme.card)
+                    .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 18, style: .continuous)
+                            .stroke(Theme.accent.opacity(0.5), style: StrokeStyle(lineWidth: 1.5, dash: [6, 5]))
+                    )
+                }
+                .buttonStyle(.plain)
             }
 
             if let estimateNote {

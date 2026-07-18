@@ -15,7 +15,7 @@ enum Theme {
     static let amberSoft = Color(light: 0xF3E9D5, dark: 0x3A2F1B)
     static let danger = Color(light: 0xB0503E, dark: 0xE08A78)
 
-    static let cornerRadius: CGFloat = 22
+    static let cornerRadius: CGFloat = 24
 }
 
 extension Color {

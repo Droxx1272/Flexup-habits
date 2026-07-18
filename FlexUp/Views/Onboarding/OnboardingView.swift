@@ -19,7 +19,28 @@ struct OnboardingView: View {
     @State private var wakeDays: Set<Int> = [2, 3, 4, 5, 6]
     @State private var wakeAlarm = true
 
-    private let identitySuggestions = ["a runner", "an early riser", "stronger", "consistent", "a morning person"]
+    /// Identity archetypes — the person you're building toward, not a hobby
+    /// tag. Picking one shapes the app's voice; "In My Words" opens a field.
+    private struct IdentityOption: Identifiable, Hashable {
+        var id: String { title }
+        let icon: String
+        let title: String
+        let statement: String
+        let detail: String
+        var isCustom: Bool = false
+    }
+
+    private static let identityOptions: [IdentityOption] = [
+        IdentityOption(icon: "sunrise.fill", title: "The Early Riser", statement: "an early riser", detail: "Up before the noise. Mornings owned."),
+        IdentityOption(icon: "figure.run", title: "The Runner", statement: "a runner", detail: "Kilometres over excuses."),
+        IdentityOption(icon: "dumbbell", title: "The Athlete", statement: "an athlete", detail: "Stronger every single week."),
+        IdentityOption(icon: "target", title: "The Disciplined", statement: "someone who keeps every small promise", detail: "Small promises, always kept."),
+        IdentityOption(icon: "arrow.uturn.up", title: "The Comeback", statement: "back on track", detail: "Falling off isn't failing. Staying off is."),
+        IdentityOption(icon: "pencil.line", title: "In My Words", statement: "", detail: "Say it your way.", isCustom: true),
+    ]
+
+    @State private var selectedIdentity: IdentityOption?
+    @State private var heroAppeared = false
     private let dayLetters = ["S", "M", "T", "W", "T", "F", "S"]
     private let interestColumns = [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)]
 
@@ -141,11 +162,19 @@ struct OnboardingView: View {
     }
 
     private func finish() {
+        let trimmedCustom = identity.trimmingCharacters(in: .whitespaces)
+        let resolvedIdentity: String
+        if let choice = selectedIdentity, !choice.isCustom {
+            resolvedIdentity = choice.statement
+        } else if !trimmedCustom.isEmpty {
+            resolvedIdentity = trimmedCustom
+        } else {
+            resolvedIdentity = "someone who follows through"
+        }
+
         store.completeOnboarding(
             name: name.trimmingCharacters(in: .whitespaces),
-            identity: identity.trimmingCharacters(in: .whitespaces).isEmpty
-                ? "someone who follows through"
-                : identity.trimmingCharacters(in: .whitespaces),
+            identity: resolvedIdentity,
             interests: Array(interests),
             templates: Array(selectedTemplates)
         )
@@ -178,92 +207,136 @@ struct OnboardingView: View {
     // MARK: Steps
 
     private var welcomeStep: some View {
-        VStack(alignment: .leading, spacing: 24) {
-            Spacer(minLength: 30)
-            Image(systemName: "arrow.up.right.circle.fill")
-                .font(.system(size: 54))
-                .foregroundStyle(Theme.accent)
-            Text("FLEXUP")
-                .font(.flexDisplay(52))
-                .foregroundStyle(Theme.ink)
-            Text("THE OPERATING SYSTEM FOR BECOMING THE PERSON YOU WANT TO BE.")
-                .font(.flexMono(13))
-                .tracking(2)
-                .foregroundStyle(Theme.inkSubtle)
-                .lineSpacing(6)
-
-            HStack(spacing: 12) {
-                pillarBadge("sunrise.fill", "Wake")
-                pillarBadge("figure.run", "Run")
-                pillarBadge("dumbbell", "Gym")
-                pillarBadge("fork.knife", "Diet")
+        VStack(alignment: .leading, spacing: 18) {
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 8) {
+                    Image(systemName: "arrow.up.right.circle.fill")
+                        .font(.system(size: 22))
+                        .foregroundStyle(Theme.accent)
+                    Text("FLEXUP")
+                        .font(.flexMono(13))
+                        .tracking(3)
+                        .foregroundStyle(Theme.background.opacity(0.85))
+                    Spacer()
+                }
+                Spacer(minLength: 28)
+                heroLine("WAKE.", index: 0, accent: false)
+                heroLine("RUN.", index: 1, accent: false)
+                heroLine("LIFT.", index: 2, accent: false)
+                heroLine("FUEL.", index: 3, accent: true)
+                Spacer(minLength: 28)
+                Text("THE OPERATING SYSTEM FOR BECOMING THE PERSON YOU WANT TO BE.")
+                    .font(.flexMono(11))
+                    .tracking(2)
+                    .lineSpacing(5)
+                    .foregroundStyle(Theme.background.opacity(0.65))
+                    .opacity(heroAppeared ? 1 : 0)
+                    .animation(.easeOut(duration: 0.5).delay(0.55), value: heroAppeared)
             }
-            .frame(maxWidth: .infinity)
-            .padding(.top, 8)
+            .padding(26)
+            .frame(maxWidth: .infinity, minHeight: 400, alignment: .leading)
+            .background(Theme.ink)
+            .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
 
-            Text("Four pillars. One streak at a time. No feeds, no noise — the app exists to get you off your phone.")
+            Text("No feeds. No noise. Four pillars, one streak at a time — built to get you off your phone.")
                 .font(.flexBody())
                 .foregroundStyle(Theme.inkSubtle)
         }
+        .onAppear { heroAppeared = true }
     }
 
-    private func pillarBadge(_ icon: String, _ label: String) -> some View {
-        VStack(spacing: 8) {
-            ZStack {
-                Circle()
-                    .fill(Theme.ink)
-                    .frame(width: 52, height: 52)
-                Image(systemName: icon)
-                    .font(.system(size: 20, weight: .semibold))
-                    .foregroundStyle(Theme.background)
-            }
-            Text(label.uppercased())
-                .font(.flexMono(9))
-                .tracking(1)
-                .foregroundStyle(Theme.inkSubtle)
-        }
-        .frame(maxWidth: .infinity)
+    private func heroLine(_ text: String, index: Int, accent: Bool) -> some View {
+        Text(text)
+            .font(.flexDisplay(48))
+            .foregroundStyle(accent ? Theme.accent : Theme.background)
+            .opacity(heroAppeared ? 1 : 0)
+            .offset(y: heroAppeared ? 0 : 16)
+            .animation(.spring(duration: 0.45).delay(Double(index) * 0.09 + 0.1), value: heroAppeared)
     }
 
     private var nameStep: some View {
-        VStack(alignment: .leading, spacing: 24) {
+        VStack(alignment: .leading, spacing: 28) {
             stepHeader("What should we call you?", "First name is fine. It's how the app talks to you.")
-            TextField("Your name", text: $name)
-                .font(.flexDisplay(26))
-                .foregroundStyle(Theme.ink)
-                .padding(18)
-                .background(Theme.card)
-                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+            VStack(alignment: .leading, spacing: 10) {
+                Text("FIRST NAME")
+                    .font(.flexMono(10))
+                    .tracking(2)
+                    .foregroundStyle(Theme.inkSubtle)
+                TextField("Your name", text: $name)
+                    .font(.flexDisplay(36))
+                    .foregroundStyle(Theme.ink)
+                    .padding(.bottom, 12)
+                    .overlay(alignment: .bottom) {
+                        RoundedRectangle(cornerRadius: 2)
+                            .fill(name.trimmingCharacters(in: .whitespaces).isEmpty ? Theme.ink.opacity(0.15) : Theme.accent)
+                            .frame(height: 3)
+                    }
+                    .animation(.easeOut(duration: 0.2), value: name.isEmpty)
+            }
         }
     }
 
     private var identityStep: some View {
         VStack(alignment: .leading, spacing: 24) {
-            stepHeader("Who are you becoming?", "FlexUp is built around identity, not streaks for their own sake. Skip it if you're not sure yet.")
-
-            HStack(spacing: 0) {
-                Text("I'm becoming ")
-                    .font(.flexBodyBold())
-                    .foregroundStyle(Theme.inkSubtle)
-                TextField("a runner", text: $identity)
-                    .font(.flexBodyBold())
-                    .foregroundStyle(Theme.ink)
-            }
-            .padding(18)
-            .background(Theme.card)
-            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-
-            ScrollView(.horizontal) {
-                HStack(spacing: 8) {
-                    ForEach(identitySuggestions, id: \.self) { suggestion in
-                        SelectableChip(label: suggestion, isSelected: identity == suggestion) {
-                            identity = suggestion
-                        }
-                    }
+            stepHeader("Who are you becoming?", "Not a goal — an identity. Pick the person you're building toward.")
+            LazyVGrid(columns: interestColumns, spacing: 10) {
+                ForEach(Self.identityOptions) { option in
+                    identityCard(option)
                 }
             }
-            .scrollIndicators(.hidden)
+            if selectedIdentity?.isCustom == true {
+                HStack(spacing: 0) {
+                    Text("I'm becoming ")
+                        .font(.flexBodyBold())
+                        .foregroundStyle(Theme.inkSubtle)
+                    TextField("unstoppable", text: $identity)
+                        .font(.flexBodyBold())
+                        .foregroundStyle(Theme.ink)
+                }
+                .padding(18)
+                .background(Theme.card)
+                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            }
         }
+        .animation(.spring(duration: 0.25), value: selectedIdentity)
+    }
+
+    private func identityCard(_ option: IdentityOption) -> some View {
+        let isSelected = selectedIdentity == option
+        return Button {
+            selectedIdentity = isSelected ? nil : option
+        } label: {
+            VStack(alignment: .leading, spacing: 8) {
+                ZStack {
+                    Circle()
+                        .fill(isSelected ? Theme.accent : Theme.accentSoft)
+                        .frame(width: 40, height: 40)
+                    Image(systemName: option.icon)
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(isSelected ? Theme.background : Theme.accent)
+                }
+                Spacer(minLength: 0)
+                Text(option.title.uppercased())
+                    .font(.flexMono(12))
+                    .tracking(1)
+                    .multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text(option.detail)
+                    .font(.flexCaption())
+                    .foregroundStyle(isSelected ? Theme.background.opacity(0.7) : Theme.inkSubtle)
+                    .multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .foregroundStyle(isSelected ? Theme.background : Theme.ink)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(height: 128)
+            .padding(16)
+            .background(isSelected ? Theme.ink : Theme.card)
+            .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .scaleEffect(isSelected ? 1.02 : 1)
+        }
+        .buttonStyle(.plain)
     }
 
     private var interestsStep: some View {

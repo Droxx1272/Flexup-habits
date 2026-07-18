@@ -7,6 +7,7 @@ struct CelebrationView: View {
     let celebration: Celebration
 
     @State private var appeared = false
+    @State private var ringExpanded = false
 
     var body: some View {
         ZStack {
@@ -16,6 +17,11 @@ struct CelebrationView: View {
 
             VStack(spacing: 18) {
                 ZStack {
+                    Circle()
+                        .stroke(Theme.accent.opacity(0.5), lineWidth: 2)
+                        .frame(width: 96, height: 96)
+                        .scaleEffect(ringExpanded ? 1.9 : 1)
+                        .opacity(ringExpanded ? 0 : 0.7)
                     Circle()
                         .fill(Theme.accentSoft)
                         .frame(width: 96, height: 96)
@@ -80,6 +86,9 @@ struct CelebrationView: View {
         .onAppear {
             withAnimation(.spring(duration: 0.45, bounce: 0.35)) {
                 appeared = true
+            }
+            withAnimation(.easeOut(duration: 0.9).delay(0.2)) {
+                ringExpanded = true
             }
         }
     }

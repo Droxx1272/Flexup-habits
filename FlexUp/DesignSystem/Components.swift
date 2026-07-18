@@ -17,7 +17,12 @@ struct FlexCard<Content: View>: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(Theme.card)
             .clipShape(RoundedRectangle(cornerRadius: Theme.cornerRadius, style: .continuous))
-            .shadow(color: .black.opacity(0.05), radius: 12, y: 4)
+            .overlay(
+                // Hairline keeps cards defined in dark mode where shadows vanish.
+                RoundedRectangle(cornerRadius: Theme.cornerRadius, style: .continuous)
+                    .stroke(Theme.ink.opacity(0.05), lineWidth: 1)
+            )
+            .shadow(color: .black.opacity(0.05), radius: 14, y: 6)
     }
 }
 
@@ -33,6 +38,7 @@ struct PrimaryButtonStyle: ButtonStyle {
             .padding(.vertical, 17)
             .background(Theme.ink.opacity(configuration.isPressed ? 0.85 : 1))
             .clipShape(Capsule())
+            .shadow(color: Theme.ink.opacity(configuration.isPressed ? 0.12 : 0.25), radius: 10, y: 4)
             .scaleEffect(configuration.isPressed ? 0.98 : 1)
             .animation(.spring(duration: 0.2), value: configuration.isPressed)
     }
@@ -186,10 +192,15 @@ struct ScreenHeader: View {
             Text(title.uppercased())
                 .font(.flexDisplay(40))
                 .foregroundStyle(Theme.ink)
-            Text(tagline.uppercased())
-                .font(.flexMono(12))
-                .tracking(2)
-                .foregroundStyle(Theme.inkSubtle)
+            HStack(spacing: 8) {
+                RoundedRectangle(cornerRadius: 2)
+                    .fill(Theme.accent)
+                    .frame(width: 22, height: 3)
+                Text(tagline.uppercased())
+                    .font(.flexMono(12))
+                    .tracking(2)
+                    .foregroundStyle(Theme.inkSubtle)
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.top, 8)
