@@ -231,6 +231,10 @@ struct WakeConfig: Codable, Hashable {
     /// Calendar weekdays (1 = Sunday … 7 = Saturday) the wake-up applies to.
     var days: Set<Int> = [2, 3, 4, 5, 6]
     var enabled = false
+    /// The AlarmKit alarm currently scheduled (iOS 26+), so it can be
+    /// cancelled on reschedule. Optional — nil means notifications are
+    /// carrying the wake-up.
+    var alarmID: UUID?
 
     var timeToday: Date {
         Calendar.current.date(bySettingHour: hour, minute: minute, second: 0, of: .now) ?? .now

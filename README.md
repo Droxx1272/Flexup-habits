@@ -35,7 +35,7 @@ Four pillars plus the proof — one tab each, nothing buried:
 
 | Tab | Purpose |
 | --- | --- |
-| **Wake** | Wake/Sleep toggle. **Wake**: Erly-style wake time with a persistent alarm (a burst of Time Sensitive notifications 40s apart that stop the moment you check in), morning check-in (photo of the sky counts), weekly streak strip, and a 5-second alarm preview. **Sleep**: bedtime reminder, log-last-night flow (bedtime/wake time pickers + quality rating), duration/quality history, 7-day average and night streak. No snoozing, no backup alarms. |
+| **Wake** | Wake/Sleep toggle. **Wake**: Erly-style wake time with a real alarm (AlarmKit on iOS 26+ — rings through the mute switch like the Clock app; older systems fall back to a burst of Time Sensitive notifications 40s apart that stop the moment you check in), morning check-in (photo of the sky counts), weekly streak strip, and a 5-second alarm preview. **Sleep**: bedtime reminder, log-last-night flow (bedtime/wake time pickers + quality rating), duration/quality history, 7-day average and night streak. No snoozing, no backup alarms. |
 | **Run** | GPS tracking (Strava-style): live route map while recording, time/distance/pace/elevation, per-km splits, and a run detail view with the route drawn, headline stats, and split pace bars. |
 | **Gym** | Training log (Hevy-style): live session with exercises, sets × kg × reps, per-exercise bests, volume stats, history. |
 | **Diet** | Calorie tracking (Lose It-style): daily budget ring, four meals, quick-add foods, and meal photos — snap the plate and let AI estimate the calories (Claude Haiku 4.5 vision via the Anthropic API with structured JSON output, ~$0.002/photo; bring-your-own key in v1, backend proxy before release). |

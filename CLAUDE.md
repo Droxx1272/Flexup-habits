@@ -33,10 +33,11 @@ FlexUp is a SwiftUI iOS app (iOS 17+, Xcode 16 folder-synchronized project, zero
 
 ## Wake alarm constraints
 
-- The wake-up is built on `UNUserNotificationCenter`, **not a real alarm**. A single notification pings once, so `updateWakeSchedule()` stacks 6 repeating Time Sensitive notifications 40s apart per scheduled weekday; `checkInWake` calls `silenceWakeNudges()` to drop the rest of today's while keeping next week's.
-- **Budget: iOS allows 64 pending notifications per app.** 6 nudges × 7 days = 42, plus 7 bedtime = 49. Raising the nudge count or adding new repeating schedules must stay under 64.
-- Notifications **cannot** ring through the mute switch. `.timeSensitive` pierces Focus modes only (and needs the Time Sensitive Notifications capability in Xcode). Ringing through silent requires **AlarmKit** (iOS 26+, `NSAlarmKitUsageDescription`) or the critical-alerts entitlement (Apple approval, rarely granted). Don't claim alarm behavior the code can't deliver.
-- `NotificationPresenter` is set as the notification delegate in `FlexUpApp.init()` so alarms still sound while the app is foregrounded.
+- **Two paths, never both at once.** `updateWakeSchedule()` first tries `WakeAlarmScheduler` (AlarmKit, iOS 26+) — a real alarm that rings through the mute switch. Only when that returns `.unavailable` (pre-iOS 26 or permission denied) does it fall back to `scheduleWakeNotifications()`. Firing both would double-alert the morning.
+- AlarmKit needs `INFOPLIST_KEY_NSAlarmKitUsageDescription` (already in build settings) — a missing or empty value silently blocks all scheduling. The scheduled alarm's ID lives in `WakeConfig.alarmID` so a reschedule can cancel the previous one.
+- Notifications **cannot** ring through the mute switch; `.timeSensitive` pierces Focus modes only (and wants the Time Sensitive Notifications capability in Xcode). Don't claim alarm behavior the code can't deliver.
+- **Notification budget: iOS allows 64 pending per app.** The fallback uses 6 nudges × 7 days = 42, plus 7 bedtime = 49. Anything new must stay under 64.
+- `checkInWake` calls `silenceWakeNudges()` to drop the rest of today's nudges while keeping next week's; `NotificationPresenter` is the notification delegate (set in `FlexUpApp.init()`) so alerts still sound while the app is foregrounded.
 
 ## Product rules
 

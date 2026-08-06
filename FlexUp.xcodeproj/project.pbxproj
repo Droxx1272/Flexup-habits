@@ -254,6 +254,7 @@
 				DEVELOPMENT_ASSET_PATHS = "";
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSAlarmKitUsageDescription = "FlexUp schedules your wake-up so it rings like a real alarm, even when your phone is on silent.";
 				INFOPLIST_KEY_NSCameraUsageDescription = "FlexUp uses the camera for progress photos and photo-verified check-ins. Photos stay on your device.";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "FlexUp uses your location to measure distance and pace during an active run. It is never used in the background.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -285,6 +286,7 @@
 				DEVELOPMENT_ASSET_PATHS = "";
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSAlarmKitUsageDescription = "FlexUp schedules your wake-up so it rings like a real alarm, even when your phone is on silent.";
 				INFOPLIST_KEY_NSCameraUsageDescription = "FlexUp uses the camera for progress photos and photo-verified check-ins. Photos stay on your device.";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "FlexUp uses your location to measure distance and pace during an active run. It is never used in the background.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;

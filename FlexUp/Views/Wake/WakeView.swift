@@ -360,6 +360,24 @@ struct WakeSetupSheet: View {
     private let calendar = Calendar.current
     private let dayLetters = ["S", "M", "T", "W", "T", "F", "S"]
 
+    /// iOS 26 gets a real AlarmKit alarm; older systems get the stacked
+    /// notification burst. Say which, honestly.
+    private var alarmBehaviourNote: String {
+        if #available(iOS 26.0, *) {
+            "Rings like a real alarm until you stop it."
+        } else {
+            "Buzzes every 40 seconds until you check in."
+        }
+    }
+
+    private var alarmCapabilityNote: String {
+        if #available(iOS 26.0, *) {
+            "Your wake-up rings at full volume even on silent, like the Clock app. The preview above plays the notification sound instead."
+        } else {
+            "Your phone must be off silent to hear it — before iOS 26, only the Clock app can ring through the mute switch."
+        }
+    }
+
     var body: some View {
         VStack(spacing: 18) {
             Capsule()
@@ -400,10 +418,10 @@ struct WakeSetupSheet: View {
 
             Toggle(isOn: $enabled) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Alarm notification")
+                    Text("Wake-up alarm")
                         .font(.flexBodyBold())
                         .foregroundStyle(Theme.ink)
-                    Text("Buzzes every 40 seconds until you check in.")
+                    Text(alarmBehaviourNote)
                         .font(.flexCaption())
                         .foregroundStyle(Theme.inkSubtle)
                 }
@@ -427,7 +445,7 @@ struct WakeSetupSheet: View {
                 .buttonStyle(SecondaryButtonStyle())
                 .disabled(previewSent)
 
-                Text("Your phone must be off silent to hear it — iOS only lets the Clock app ring through the mute switch.")
+                Text(alarmCapabilityNote)
                     .font(.flexCaption())
                     .foregroundStyle(Theme.inkSubtle)
                     .multilineTextAlignment(.center)

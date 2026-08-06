@@ -518,12 +518,46 @@ final class AppStore {
         return components
     }
 
-    /// Re-sync the repeating wake-up notifications with the current config.
+    /// Re-sync the wake-up with the current config.
+    ///
+    /// AlarmKit (iOS 26+) gives a real alarm that rings through the mute
+    /// switch, so when it takes the job the notification burst stays off —
+    /// otherwise the morning would fire twice. Older systems fall back to
+    /// stacked notifications.
     func updateWakeSchedule() {
-        let center = UNUserNotificationCenter.current()
-        center.removePendingNotificationRequests(withIdentifiers: wakeNotificationIdentifiers)
+        UNUserNotificationCenter.current()
+            .removePendingNotificationRequests(withIdentifiers: wakeNotificationIdentifiers)
         save()
+
+        let config = wake
+        Task { @MainActor in
+            let result = await WakeAlarmScheduler.reschedule(
+                hour: config.hour,
+                minute: config.minute,
+                weekdays: config.days,
+                enabled: config.enabled,
+                existingID: config.alarmID,
+                tint: Theme.accent
+            )
+            switch result {
+            case .scheduled(let id):
+                self.wake.alarmID = id
+                self.save()
+            case .disabled:
+                self.wake.alarmID = nil
+                self.save()
+            case .unavailable:
+                self.wake.alarmID = nil
+                self.save()
+                self.scheduleWakeNotifications()
+            }
+        }
+    }
+
+    /// The pre-AlarmKit fallback: a burst of Time Sensitive notifications.
+    private func scheduleWakeNotifications() {
         guard wake.enabled else { return }
+        let center = UNUserNotificationCenter.current()
 
         center.requestAuthorization(options: [.alert, .sound, .badge]) { [weak self] granted, _ in
             guard granted, let self else { return }
