@@ -31,6 +31,13 @@ FlexUp is a SwiftUI iOS app (iOS 17+, Xcode 16 folder-synchronized project, zero
 - No XP/levels/follower counts/infinite scroll. Calm, whitespace-heavy, one primary CTA per screen.
 - Dormant (built but out of the tab bar, kept for later): Home, Discover, Squad (feed + memories), Calendar, Track hub, Profile — they must keep compiling.
 
+## Wake alarm constraints
+
+- The wake-up is built on `UNUserNotificationCenter`, **not a real alarm**. A single notification pings once, so `updateWakeSchedule()` stacks 6 repeating Time Sensitive notifications 40s apart per scheduled weekday; `checkInWake` calls `silenceWakeNudges()` to drop the rest of today's while keeping next week's.
+- **Budget: iOS allows 64 pending notifications per app.** 6 nudges × 7 days = 42, plus 7 bedtime = 49. Raising the nudge count or adding new repeating schedules must stay under 64.
+- Notifications **cannot** ring through the mute switch. `.timeSensitive` pierces Focus modes only (and needs the Time Sensitive Notifications capability in Xcode). Ringing through silent requires **AlarmKit** (iOS 26+, `NSAlarmKitUsageDescription`) or the critical-alerts entitlement (Apple approval, rarely granted). Don't claim alarm behavior the code can't deliver.
+- `NotificationPresenter` is set as the notification delegate in `FlexUpApp.init()` so alarms still sound while the app is foregrounded.
+
 ## Product rules
 
 - Every feature must answer: "does this help someone follow through?"

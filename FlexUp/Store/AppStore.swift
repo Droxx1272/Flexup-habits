@@ -471,32 +471,118 @@ final class AppStore {
             achievement: unlocked.first
         )
         save()
+        silenceWakeNudges()
+    }
+
+    /// A single notification pings once and stops — useless as an alarm. The
+    /// wake-up instead schedules a burst of nudges that keep buzzing until
+    /// you check in. iOS caps an app at 64 pending notifications, so this
+    /// stays modest: 6 nudges × 7 days = 42, leaving room for bedtime.
+    private static let wakeNudgeCount = 6
+    private static let wakeNudgeSpacingSeconds = 40
+
+    private static let wakeNudgeCopy: [(title: String, body: String)] = [
+        ("Wake up. You said so.", "Check in before the day decides for you."),
+        ("Still in bed.", "You picked this time. Feet on the floor."),
+        ("This is the moment.", "The one where it gets decided either way."),
+        ("Your streak is on the line.", "Open FlexUp and check in."),
+        ("Last call.", "Get up now and the whole day is still yours."),
+        ("Morning's slipping.", "Check in — even late counts more than not at all."),
+    ]
+
+    /// Identifiers for every wake notification, including the legacy
+    /// single-notification IDs so older schedules get cleaned up.
+    private var wakeNotificationIdentifiers: [String] {
+        var identifiers: [String] = []
+        for weekday in 1...7 {
+            identifiers.append("wake-\(weekday)")
+            for nudge in 0..<Self.wakeNudgeCount {
+                identifiers.append("wake-\(weekday)-\(nudge)")
+            }
+        }
+        return identifiers
+    }
+
+    /// Weekday/time components pushed forward by `offset` seconds, rolling
+    /// into the next weekday when the offset crosses midnight.
+    private static func alarmComponents(weekday: Int, hour: Int, minute: Int, offsetSeconds offset: Int) -> DateComponents {
+        let total = hour * 3600 + minute * 60 + offset
+        let dayRollover = total / 86_400
+        let within = total % 86_400
+
+        var components = DateComponents()
+        components.weekday = (weekday - 1 + dayRollover) % 7 + 1
+        components.hour = within / 3600
+        components.minute = (within % 3600) / 60
+        components.second = within % 60
+        return components
     }
 
     /// Re-sync the repeating wake-up notifications with the current config.
     func updateWakeSchedule() {
         let center = UNUserNotificationCenter.current()
-        center.removePendingNotificationRequests(withIdentifiers: (1...7).map { "wake-\($0)" })
+        center.removePendingNotificationRequests(withIdentifiers: wakeNotificationIdentifiers)
         save()
         guard wake.enabled else { return }
 
-        center.requestAuthorization(options: [.alert, .sound]) { [weak self] granted, _ in
+        center.requestAuthorization(options: [.alert, .sound, .badge]) { [weak self] granted, _ in
             guard granted, let self else { return }
             let config = self.wake
             for weekday in config.days {
-                var components = DateComponents()
-                components.weekday = weekday
-                components.hour = config.hour
-                components.minute = config.minute
+                for nudge in 0..<Self.wakeNudgeCount {
+                    let copy = Self.wakeNudgeCopy[min(nudge, Self.wakeNudgeCopy.count - 1)]
+                    let components = Self.alarmComponents(
+                        weekday: weekday,
+                        hour: config.hour,
+                        minute: config.minute,
+                        offsetSeconds: nudge * Self.wakeNudgeSpacingSeconds
+                    )
 
-                let content = UNMutableNotificationContent()
-                content.title = "Wake up. You said so."
-                content.body = "Check in before the day decides for you."
-                content.sound = .default
+                    let content = UNMutableNotificationContent()
+                    content.title = copy.title
+                    content.body = copy.body
+                    content.sound = .default
+                    // Time Sensitive breaks through Focus modes (but never the
+                    // ring/silent switch — only AlarmKit or critical alerts can).
+                    content.interruptionLevel = .timeSensitive
 
-                let trigger = UNCalendarNotificationTrigger(dateMatching: components, repeats: true)
-                center.add(UNNotificationRequest(identifier: "wake-\(weekday)", content: content, trigger: trigger))
+                    let trigger = UNCalendarNotificationTrigger(dateMatching: components, repeats: true)
+                    center.add(UNNotificationRequest(
+                        identifier: "wake-\(weekday)-\(nudge)",
+                        content: content,
+                        trigger: trigger
+                    ))
+                }
             }
+        }
+    }
+
+    /// Stop the rest of this morning's nudges. Removing and re-adding the
+    /// repeating requests clears today's remaining buzzes while leaving next
+    /// week's alarm intact.
+    private func silenceWakeNudges() {
+        let center = UNUserNotificationCenter.current()
+        center.removeDeliveredNotifications(withIdentifiers: wakeNotificationIdentifiers)
+        updateWakeSchedule()
+    }
+
+    /// Fire one alarm-style notification shortly, so the wake-up can be
+    /// heard and verified without waiting for the morning.
+    func previewWakeAlarm() {
+        let center = UNUserNotificationCenter.current()
+        center.requestAuthorization(options: [.alert, .sound, .badge]) { granted, _ in
+            guard granted else { return }
+            let content = UNMutableNotificationContent()
+            content.title = "Wake up. You said so."
+            content.body = "This is what your morning will sound like."
+            content.sound = .default
+            content.interruptionLevel = .timeSensitive
+
+            center.add(UNNotificationRequest(
+                identifier: "wake-preview",
+                content: content,
+                trigger: UNTimeIntervalNotificationTrigger(timeInterval: 5, repeats: false)
+            ))
         }
     }
 

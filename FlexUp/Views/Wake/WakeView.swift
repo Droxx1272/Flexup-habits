@@ -355,6 +355,7 @@ struct WakeSetupSheet: View {
     @State private var time = Date.now
     @State private var days: Set<Int> = [2, 3, 4, 5, 6]
     @State private var enabled = true
+    @State private var previewSent = false
 
     private let calendar = Calendar.current
     private let dayLetters = ["S", "M", "T", "W", "T", "F", "S"]
@@ -402,7 +403,7 @@ struct WakeSetupSheet: View {
                     Text("Alarm notification")
                         .font(.flexBodyBold())
                         .foregroundStyle(Theme.ink)
-                    Text("Fires at your wake time on scheduled days.")
+                    Text("Buzzes every 40 seconds until you check in.")
                         .font(.flexCaption())
                         .foregroundStyle(Theme.inkSubtle)
                 }
@@ -411,6 +412,27 @@ struct WakeSetupSheet: View {
             .padding(14)
             .background(Theme.card)
             .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+
+            VStack(spacing: 8) {
+                Button {
+                    store.previewWakeAlarm()
+                    previewSent = true
+                    Task {
+                        try? await Task.sleep(nanoseconds: 6_000_000_000)
+                        previewSent = false
+                    }
+                } label: {
+                    Label(previewSent ? "Listen — 5 seconds…" : "Preview the alarm", systemImage: "speaker.wave.3")
+                }
+                .buttonStyle(SecondaryButtonStyle())
+                .disabled(previewSent)
+
+                Text("Your phone must be off silent to hear it — iOS only lets the Clock app ring through the mute switch.")
+                    .font(.flexCaption())
+                    .foregroundStyle(Theme.inkSubtle)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 8)
+            }
 
             Spacer()
 
