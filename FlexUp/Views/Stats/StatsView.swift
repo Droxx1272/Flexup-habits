@@ -7,6 +7,7 @@ import Charts
 struct StatsView: View {
     @Environment(AppStore.self) private var store
     @State private var confirmSignOut = false
+    @State private var showHabits = false
 
     private let achievementColumns = [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())]
 
@@ -19,6 +20,8 @@ struct StatsView: View {
                     todayCard
                     pillarTiles
                     consistencyCard
+                    habitsCard
+                    weightCard
                     photosSection
                     achievementsSection
                     accountSection
@@ -29,6 +32,9 @@ struct StatsView: View {
             .scrollIndicators(.hidden)
             .background(Theme.background)
             .toolbar(.hidden, for: .navigationBar)
+            .sheet(isPresented: $showHabits) {
+                HabitsSheet()
+            }
         }
     }
 
@@ -151,6 +157,73 @@ struct StatsView: View {
             LazyVGrid(columns: achievementColumns, spacing: 10) {
                 ForEach(store.achievements) { achievement in
                     achievementTile(achievement)
+                }
+            }
+        }
+    }
+
+    // MARK: Habits
+
+    private var habitsCard: some View {
+        Button {
+            showHabits = true
+        } label: {
+            FlexCard {
+                HStack(spacing: 14) {
+                    IconBadge(systemName: "repeat", size: 44)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("Habits")
+                            .font(.flexBodyBold())
+                            .foregroundStyle(Theme.ink)
+                        Text(store.habits.isEmpty
+                             ? "Add the habits that schedule your days"
+                             : "\(store.habits.count) scheduled · tap to add or edit")
+                            .font(.flexCaption())
+                            .foregroundStyle(Theme.inkSubtle)
+                    }
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(Theme.inkSubtle)
+                }
+            }
+        }
+        .buttonStyle(.plain)
+    }
+
+    // MARK: Body weight
+
+    private var weightCard: some View {
+        Group {
+            if store.weightEntries.count >= 2 {
+                FlexCard {
+                    VStack(alignment: .leading, spacing: 12) {
+                        HStack {
+                            SectionHeader(title: "Body weight", subtitle: "The trend, not any single day.")
+                            Spacer()
+                            if let latest = store.latestWeight {
+                                Text(String(format: "%.1f kg", latest.kilograms))
+                                    .font(.flexStat(22))
+                                    .foregroundStyle(Theme.accent)
+                            }
+                        }
+                        Chart(store.weightEntries.sorted { $0.date < $1.date }) { entry in
+                            LineMark(
+                                x: .value("Date", entry.date),
+                                y: .value("Kilograms", entry.kilograms)
+                            )
+                            .foregroundStyle(Theme.accent)
+                            .interpolationMethod(.catmullRom)
+
+                            PointMark(
+                                x: .value("Date", entry.date),
+                                y: .value("Kilograms", entry.kilograms)
+                            )
+                            .foregroundStyle(Theme.accent)
+                        }
+                        .chartYScale(domain: .automatic(includesZero: false))
+                        .frame(height: 130)
+                    }
                 }
             }
         }

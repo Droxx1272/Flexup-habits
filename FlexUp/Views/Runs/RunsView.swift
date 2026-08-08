@@ -49,7 +49,7 @@ struct RunSection: View {
 
     private var historySection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            SectionHeader(title: "History", subtitle: store.runs.isEmpty ? nil : "Tap a run for the route and splits.")
+            SectionHeader(title: "History", subtitle: store.runs.isEmpty ? nil : "Tap for the route and splits. Long-press to delete.")
             if store.runs.isEmpty {
                 EmptyStateCard(
                     icon: "figure.run",
@@ -62,6 +62,13 @@ struct RunSection: View {
                         RunRow(run: run)
                     }
                     .buttonStyle(.plain)
+                    .contextMenu {
+                        Button(role: .destructive) {
+                            store.deleteRun(run)
+                        } label: {
+                            Label("Delete run", systemImage: "trash")
+                        }
+                    }
                 }
             }
         }

@@ -19,6 +19,8 @@ FlexUp is a SwiftUI iOS app (iOS 17+, Xcode 16 folder-synchronized project, zero
 - `FlexUp/Store/AppStore.swift` is the single source of truth (`@Observable`). All state mutations go through store methods; views never mutate collections directly. Persistence is a JSON `Snapshot` written debounced/off-main-thread by `save()` — **new Snapshot fields must be optional** (`var foo: [Foo]?`) so old on-device saves still decode.
 - Models live in `FlexUp/Models/Models.swift`; sample/fixture data in `FlexUp/Store/SampleData.swift`.
 - Completing runs/workouts auto-completes matching commitments (see `logRun`/`logWorkout`); achievements unlock via `unlock(key:)` and the catalog merges on load (`mergeAchievementCatalog`).
+- Every log type has a delete on the store (`deleteRun`/`deleteWorkout`/`deleteSleep`/`deleteFood`/`deleteWeight`/`deleteRoutine`/`deleteHabit`), surfaced in the UI via `.contextMenu` — rows live in `ScrollView`s, not `List`s, so `.swipeActions` won't work.
+- Editing a habit (`updateHabit`) re-materializes only its **upcoming** commitments; completed and missed ones are never touched, so history stays honest.
 - Images: always render via `AsyncPhotoView` (downsampled, cached, off-main-thread — `FlexUp/Support/ImageLoading.swift`); save captures via `UIImage.flexJPEGData()` (1600px cap). Never `UIImage(contentsOfFile:)` in a view body.
 - AI calorie estimation (`FlexUp/AI/CalorieEstimator.swift`) calls the Anthropic API directly with an on-device key — prototype only; a backend proxy replaces this before release.
 - Auth is on-device (`Account` in the store): Sign in with Apple + email fallback. Sign in with Apple needs the capability + paid developer account; the email path always works.

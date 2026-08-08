@@ -304,7 +304,7 @@ struct WakeView: View {
 
     private var sleepHistoryCard: some View {
         VStack(alignment: .leading, spacing: 12) {
-            SectionHeader(title: "History", subtitle: store.sleepSessions.isEmpty ? nil : "Most recent first.")
+            SectionHeader(title: "History", subtitle: store.sleepSessions.isEmpty ? nil : "Most recent first. Long-press to delete.")
             if store.sleepSessions.isEmpty {
                 EmptyStateCard(
                     icon: "moon.zzz",
@@ -314,6 +314,13 @@ struct WakeView: View {
             } else {
                 ForEach(store.sleepSessions.sorted { $0.wakeTime > $1.wakeTime }) { session in
                     sleepRow(session)
+                        .contextMenu {
+                            Button(role: .destructive) {
+                                store.deleteSleep(session)
+                            } label: {
+                                Label("Delete night", systemImage: "trash")
+                            }
+                        }
                 }
             }
         }

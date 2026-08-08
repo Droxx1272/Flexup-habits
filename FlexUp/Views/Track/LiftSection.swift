@@ -1,10 +1,18 @@
 import SwiftUI
 
-/// Training log: start a session, add exercises, log sets × kg × reps.
+/// Training log: start a session (blank or from a saved routine), add
+/// exercises, log sets × kg × reps against last time's numbers.
 /// Finishing auto-completes today's gym commitment.
 struct LiftSection: View {
     @Environment(AppStore.self) private var store
-    @State private var showActiveWorkout = false
+    @State private var workoutStart: WorkoutStart?
+
+    /// Identifiable wrapper so one sheet handles both a blank session and
+    /// starting from a routine.
+    struct WorkoutStart: Identifiable {
+        let id = UUID()
+        let routine: Routine?
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
@@ -15,7 +23,7 @@ struct LiftSection: View {
             }
 
             Button {
-                showActiveWorkout = true
+                workoutStart = WorkoutStart(routine: nil)
             } label: {
                 HStack(spacing: 10) {
                     Image(systemName: "dumbbell")
@@ -24,23 +32,11 @@ struct LiftSection: View {
             }
             .buttonStyle(PrimaryButtonStyle())
 
-            VStack(alignment: .leading, spacing: 12) {
-                SectionHeader(title: "History", subtitle: store.workouts.isEmpty ? nil : "Most recent first.")
-                if store.workouts.isEmpty {
-                    EmptyStateCard(
-                        icon: "dumbbell",
-                        title: "No sessions yet",
-                        message: "Log the first one. The bar doesn't care where you start."
-                    )
-                } else {
-                    ForEach(store.workouts) { workout in
-                        WorkoutRow(workout: workout)
-                    }
-                }
-            }
+            routinesSection
+            historySection
         }
-        .fullScreenCover(isPresented: $showActiveWorkout) {
-            ActiveWorkoutView()
+        .fullScreenCover(item: $workoutStart) { start in
+            ActiveWorkoutView(routine: start.routine)
         }
     }
 
@@ -49,6 +45,93 @@ struct LiftSection: View {
         return volume >= 10000
             ? String(format: "%.1ft", volume / 1000)
             : "\(Int(volume))"
+    }
+
+    // MARK: Routines
+
+    private var routinesSection: some View {
+        Group {
+            if !store.routines.isEmpty {
+                VStack(alignment: .leading, spacing: 12) {
+                    SectionHeader(title: "Routines", subtitle: "Start with your exercises already loaded.")
+                    ScrollView(.horizontal) {
+                        HStack(spacing: 10) {
+                            ForEach(store.routines) { routine in
+                                routineCard(routine)
+                            }
+                        }
+                    }
+                    .scrollIndicators(.hidden)
+                }
+            }
+        }
+    }
+
+    private func routineCard(_ routine: Routine) -> some View {
+        Button {
+            workoutStart = WorkoutStart(routine: routine)
+        } label: {
+            VStack(alignment: .leading, spacing: 8) {
+                Image(systemName: "list.bullet.rectangle")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(Theme.accent)
+                Spacer(minLength: 0)
+                Text(routine.name)
+                    .font(.flexBodyBold())
+                    .foregroundStyle(Theme.ink)
+                    .lineLimit(1)
+                Text("\(routine.exerciseNames.count) EXERCISES")
+                    .font(.flexMono(9))
+                    .tracking(1)
+                    .foregroundStyle(Theme.inkSubtle)
+            }
+            .frame(width: 150, height: 110, alignment: .leading)
+            .padding(14)
+            .background(Theme.card)
+            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .contextMenu {
+            Button(role: .destructive) {
+                store.deleteRoutine(routine)
+            } label: {
+                Label("Delete routine", systemImage: "trash")
+            }
+        }
+    }
+
+    // MARK: History
+
+    private var historySection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            SectionHeader(title: "History", subtitle: store.workouts.isEmpty ? nil : "Long-press to delete.")
+            if store.workouts.isEmpty {
+                EmptyStateCard(
+                    icon: "dumbbell",
+                    title: "No sessions yet",
+                    message: "Log the first one. The bar doesn't care where you start."
+                )
+            } else {
+                ForEach(store.workouts) { workout in
+                    WorkoutRow(workout: workout)
+                        .contextMenu {
+                            Button {
+                                store.saveRoutine(
+                                    name: workout.title,
+                                    exerciseNames: workout.exercises.map(\.name)
+                                )
+                            } label: {
+                                Label("Save as routine", systemImage: "square.and.arrow.down")
+                            }
+                            Button(role: .destructive) {
+                                store.deleteWorkout(workout)
+                            } label: {
+                                Label("Delete session", systemImage: "trash")
+                            }
+                        }
+                }
+            }
+        }
     }
 }
 
@@ -92,11 +175,19 @@ struct ActiveWorkoutView: View {
     @Environment(AppStore.self) private var store
     @Environment(\.dismiss) private var dismiss
 
+    /// When set, the session starts with these exercises already loaded.
+    let routine: Routine?
+
     @State private var title = ""
     @State private var exercises: [WorkoutExercise] = []
     @State private var startedAt = Date.now
     @State private var showExercisePicker = false
     @State private var confirmDiscard = false
+    @State private var restEndsAt: Date?
+    @State private var showSaveRoutine = false
+    @State private var routineName = ""
+
+    private static let restSeconds: TimeInterval = 90
 
     private var hasLoggedSets: Bool {
         exercises.contains { $0.sets.contains { $0.reps > 0 } }
@@ -117,6 +208,8 @@ struct ActiveWorkoutView: View {
                     ForEach($exercises) { $exercise in
                         ExerciseCard(exercise: $exercise) {
                             exercises.removeAll { $0.id == exercise.id }
+                        } onSetAdded: {
+                            restEndsAt = Date.now.addingTimeInterval(Self.restSeconds)
                         }
                     }
 
@@ -126,6 +219,19 @@ struct ActiveWorkoutView: View {
                         Label("Add exercise", systemImage: "plus")
                     }
                     .buttonStyle(SecondaryButtonStyle())
+
+                    if !exercises.isEmpty {
+                        Button {
+                            routineName = title.trimmingCharacters(in: .whitespaces)
+                            showSaveRoutine = true
+                        } label: {
+                            Label("Save as routine", systemImage: "square.and.arrow.down")
+                                .font(.flexCaption())
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(Theme.accent)
+                        .frame(maxWidth: .infinity)
+                    }
                 }
                 .padding(.horizontal, 20)
                 .padding(.bottom, 20)
@@ -133,13 +239,23 @@ struct ActiveWorkoutView: View {
             .scrollIndicators(.hidden)
             .scrollDismissesKeyboard(.interactively)
 
-            Button("Finish workout") {
-                store.logWorkout(title: title, duration: Date.now.timeIntervalSince(startedAt), exercises: exercises)
-                dismiss()
+            VStack(spacing: 10) {
+                if let restEndsAt {
+                    restPill(until: restEndsAt)
+                }
+
+                Button("Finish workout") {
+                    store.logWorkout(
+                        title: title,
+                        duration: Date.now.timeIntervalSince(startedAt),
+                        exercises: exercises
+                    )
+                    dismiss()
+                }
+                .buttonStyle(PrimaryButtonStyle())
+                .disabled(!hasLoggedSets)
+                .opacity(hasLoggedSets ? 1 : 0.4)
             }
-            .buttonStyle(PrimaryButtonStyle())
-            .disabled(!hasLoggedSets)
-            .opacity(hasLoggedSets ? 1 : 0.4)
             .padding(.horizontal, 20)
             .padding(.bottom, 12)
         }
@@ -150,9 +266,55 @@ struct ActiveWorkoutView: View {
                 exercises.append(WorkoutExercise(name: name))
             }
         }
+        .alert("Save as routine", isPresented: $showSaveRoutine) {
+            TextField("Routine name", text: $routineName)
+            Button("Save") {
+                store.saveRoutine(name: routineName, exerciseNames: exercises.map(\.name))
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Next time you can start with these exercises already loaded.")
+        }
         .confirmationDialog("Discard this workout?", isPresented: $confirmDiscard, titleVisibility: .visible) {
             Button("Discard workout", role: .destructive) { dismiss() }
             Button("Keep going", role: .cancel) {}
+        }
+        .onAppear(perform: loadRoutine)
+    }
+
+    private func loadRoutine() {
+        guard let routine, exercises.isEmpty else { return }
+        title = routine.name
+        exercises = routine.exerciseNames.map { WorkoutExercise(name: $0) }
+    }
+
+    // MARK: Rest timer
+
+    private func restPill(until end: Date) -> some View {
+        TimelineView(.periodic(from: .now, by: 1)) { context in
+            let remaining = max(0, end.timeIntervalSince(context.date))
+            Button {
+                restEndsAt = nil
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: remaining > 0 ? "timer" : "checkmark.circle.fill")
+                    Text(remaining > 0
+                         ? "Rest · \(RunFormat.duration(remaining))"
+                         : "Rest done — next set")
+                        .monospacedDigit()
+                    Spacer()
+                    Text("SKIP")
+                        .font(.flexMono(9))
+                        .tracking(1)
+                }
+                .font(.flexBodyBold())
+                .foregroundStyle(remaining > 0 ? Theme.ink : Theme.accent)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+                .background(remaining > 0 ? Theme.card : Theme.accentSoft)
+                .clipShape(Capsule())
+            }
+            .buttonStyle(.plain)
         }
     }
 
@@ -194,6 +356,12 @@ struct ExerciseCard: View {
     @Environment(AppStore.self) private var store
     @Binding var exercise: WorkoutExercise
     var onDelete: () -> Void
+    var onSetAdded: () -> Void
+
+    /// What you did last time — the number to beat.
+    private var lastTime: (sets: [ExerciseSet], date: Date)? {
+        store.lastSets(for: exercise.name)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -216,6 +384,14 @@ struct ExerciseCard: View {
                         .foregroundStyle(Theme.inkSubtle)
                 }
                 .buttonStyle(.plain)
+            }
+
+            if let lastTime {
+                Text("LAST · \(lastTime.sets.map { "\(Int($0.weightKg))×\($0.reps)" }.joined(separator: "  "))")
+                    .font(.flexMono(9))
+                    .tracking(1)
+                    .foregroundStyle(Theme.inkSubtle)
+                    .lineLimit(1)
             }
 
             HStack {
@@ -262,8 +438,15 @@ struct ExerciseCard: View {
             }
 
             Button {
-                let last = exercise.sets.last
-                exercise.sets.append(ExerciseSet(weightKg: last?.weightKg ?? 0, reps: last?.reps ?? 0))
+                // Prefill from the last set logged, or from last session's
+                // matching set — you rarely change weight between sets.
+                let previous = exercise.sets.last
+                let reference = lastTime?.sets.dropFirst(exercise.sets.count).first
+                exercise.sets.append(ExerciseSet(
+                    weightKg: previous?.weightKg ?? reference?.weightKg ?? 0,
+                    reps: previous?.reps ?? reference?.reps ?? 0
+                ))
+                onSetAdded()
             } label: {
                 Label("Add set", systemImage: "plus")
                     .font(.flexCaption())

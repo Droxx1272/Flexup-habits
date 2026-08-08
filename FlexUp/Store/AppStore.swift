@@ -20,6 +20,8 @@ final class AppStore {
     var friends: [Friend] = []
     var runs: [Run] = []
     var workouts: [Workout] = []
+    var routines: [Routine] = []
+    var weightEntries: [WeightEntry] = []
     var foodEntries: [FoodEntry] = []
     var progressPhotos: [ProgressPhoto] = []
     var calorieBudget: Int = 2200
@@ -103,6 +105,59 @@ final class AppStore {
         }
         generateUpcomingCommitments()
         save()
+    }
+
+    // MARK: - Habits
+
+    /// Habits are editable for the life of the app — what you commit to in
+    /// week one shouldn't be locked in forever.
+    func addHabit(
+        title: String,
+        category: ActivityCategory,
+        weekdays: Set<Int>,
+        timeOfDay: TimeOfDay,
+        verification: VerificationMethod,
+        durationMinutes: Int
+    ) {
+        let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, !weekdays.isEmpty else { return }
+        habits.append(Habit(
+            title: trimmed,
+            category: category,
+            scheduleWeekdays: weekdays,
+            timeOfDay: timeOfDay,
+            verification: verification,
+            durationMinutes: durationMinutes
+        ))
+        generateUpcomingCommitments()
+        save()
+    }
+
+    /// Save an edited habit and re-materialize its upcoming commitments so
+    /// a changed time or day takes effect immediately. Completed history is
+    /// never touched.
+    func updateHabit(_ habit: Habit) {
+        guard let index = habits.firstIndex(where: { $0.id == habit.id }) else { return }
+        habits[index] = habit
+        removeUpcomingCommitments(forHabit: habit.id)
+        generateUpcomingCommitments()
+        save()
+    }
+
+    func deleteHabit(_ habit: Habit) {
+        habits.removeAll { $0.id == habit.id }
+        removeUpcomingCommitments(forHabit: habit.id)
+        save()
+    }
+
+    /// Drop not-yet-done commitments for a habit, keeping completed and
+    /// missed ones so the record stays honest.
+    private func removeUpcomingCommitments(forHabit habitID: UUID) {
+        commitments.removeAll { commitment in
+            commitment.habitID == habitID
+                && commitment.status != .completed
+                && commitment.status != .missed
+        }
     }
 
     // MARK: - Today
@@ -323,6 +378,11 @@ final class AppStore {
         save()
     }
 
+    func deleteRun(_ run: Run) {
+        runs.removeAll { $0.id == run.id }
+        save()
+    }
+
     var totalRunKilometers: Double {
         runs.reduce(0) { $0 + $1.kilometers }
     }
@@ -373,6 +433,69 @@ final class AppStore {
             )
         }
         save()
+    }
+
+    func deleteWorkout(_ workout: Workout) {
+        workouts.removeAll { $0.id == workout.id }
+        save()
+    }
+
+    /// The sets logged for this exercise last time it was trained — the
+    /// number to beat, shown while logging.
+    func lastSets(for exerciseName: String) -> (sets: [ExerciseSet], date: Date)? {
+        for workout in workouts.sorted(by: { $0.date > $1.date }) {
+            if let exercise = workout.exercises.first(where: { $0.name == exerciseName }),
+               !exercise.sets.isEmpty {
+                return (exercise.sets, workout.date)
+            }
+        }
+        return nil
+    }
+
+    // MARK: - Routines
+
+    func saveRoutine(name: String, exerciseNames: [String]) {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, !exerciseNames.isEmpty else { return }
+        // Re-saving under an existing name replaces it rather than duplicating.
+        if let index = routines.firstIndex(where: { $0.name.caseInsensitiveCompare(trimmed) == .orderedSame }) {
+            routines[index].exerciseNames = exerciseNames
+        } else {
+            routines.append(Routine(name: trimmed, exerciseNames: exerciseNames))
+        }
+        save()
+    }
+
+    func deleteRoutine(_ routine: Routine) {
+        routines.removeAll { $0.id == routine.id }
+        save()
+    }
+
+    // MARK: - Body weight
+
+    func logWeight(_ kilograms: Double) {
+        guard kilograms > 0 else { return }
+        weightEntries.append(WeightEntry(date: .now, kilograms: kilograms))
+        save()
+    }
+
+    func deleteWeight(_ entry: WeightEntry) {
+        weightEntries.removeAll { $0.id == entry.id }
+        save()
+    }
+
+    var latestWeight: WeightEntry? {
+        weightEntries.max { $0.date < $1.date }
+    }
+
+    /// Change since the oldest entry in the last 30 days — the trend, not
+    /// a single day's noise.
+    var weightChange30Days: Double? {
+        guard let latest = latestWeight,
+              let cutoff = calendar.date(byAdding: .day, value: -30, to: .now) else { return nil }
+        let window = weightEntries.filter { $0.date >= cutoff }.sorted { $0.date < $1.date }
+        guard let first = window.first, first.id != latest.id else { return nil }
+        return latest.kilograms - first.kilograms
     }
 
     var totalVolumeKg: Double {
@@ -672,6 +795,11 @@ final class AppStore {
             streak: sleepLogStreak > 1 ? sleepLogStreak : nil,
             achievement: unlocked.first
         )
+        save()
+    }
+
+    func deleteSleep(_ session: SleepSession) {
+        sleepSessions.removeAll { $0.id == session.id }
         save()
     }
 
@@ -1049,6 +1177,8 @@ final class AppStore {
         // Optional: added after v1, so older saved snapshots still decode.
         var runs: [Run]?
         var workouts: [Workout]?
+        var routines: [Routine]?
+        var weightEntries: [WeightEntry]?
         var foodEntries: [FoodEntry]?
         var progressPhotos: [ProgressPhoto]?
         var calorieBudget: Int?
@@ -1085,6 +1215,8 @@ final class AppStore {
             friends: friends,
             runs: runs,
             workouts: workouts,
+            routines: routines,
+            weightEntries: weightEntries,
             foodEntries: foodEntries,
             progressPhotos: progressPhotos,
             calorieBudget: calorieBudget,
@@ -1125,6 +1257,8 @@ final class AppStore {
         friends = snapshot.friends
         runs = snapshot.runs ?? []
         workouts = snapshot.workouts ?? []
+        routines = snapshot.routines ?? []
+        weightEntries = snapshot.weightEntries ?? []
         foodEntries = snapshot.foodEntries ?? []
         progressPhotos = snapshot.progressPhotos ?? []
         calorieBudget = snapshot.calorieBudget ?? 2200

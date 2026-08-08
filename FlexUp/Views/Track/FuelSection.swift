@@ -8,6 +8,7 @@ struct FuelSection: View {
     @State private var showAddFood = false
     @State private var addMeal: MealType = .breakfast
     @State private var showBudgetEdit = false
+    @State private var showLogWeight = false
 
     private var consumed: Int { store.caloriesToday }
     private var budget: Int { store.calorieBudget }
@@ -31,6 +32,11 @@ struct FuelSection: View {
             ForEach(MealType.allCases) { meal in
                 mealCard(meal)
             }
+
+            weightCard
+        }
+        .sheet(isPresented: $showLogWeight) {
+            LogWeightSheet()
         }
         .sheet(isPresented: $showAddFood) {
             AddFoodSheet(meal: addMeal)
@@ -146,6 +152,62 @@ struct FuelSection: View {
                             .buttonStyle(.plain)
                         }
                     }
+                }
+            }
+        }
+    }
+
+    // MARK: Body weight
+
+    private var weightCard: some View {
+        FlexCard(padding: 14) {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack {
+                    Image(systemName: "scalemass")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(Theme.accent)
+                    Text("BODY WEIGHT")
+                        .font(.flexMono(11))
+                        .tracking(1.5)
+                        .foregroundStyle(Theme.ink)
+                    Spacer()
+                    Button {
+                        showLogWeight = true
+                    } label: {
+                        Image(systemName: "plus.circle.fill")
+                            .font(.title3)
+                            .foregroundStyle(Theme.accent)
+                    }
+                    .buttonStyle(.plain)
+                }
+
+                if let latest = store.latestWeight {
+                    HStack(alignment: .firstTextBaseline, spacing: 10) {
+                        Text(String(format: "%.1f", latest.kilograms))
+                            .font(.flexStat(30))
+                            .foregroundStyle(Theme.ink)
+                        Text("KG")
+                            .font(.flexMono(10))
+                            .tracking(1.5)
+                            .foregroundStyle(Theme.inkSubtle)
+                        Spacer()
+                        if let change = store.weightChange30Days {
+                            HStack(spacing: 4) {
+                                Image(systemName: change >= 0 ? "arrow.up.right" : "arrow.down.right")
+                                Text(String(format: "%.1f kg / 30d", abs(change)))
+                            }
+                            .font(.flexCaption())
+                            .foregroundStyle(Theme.inkSubtle)
+                        }
+                    }
+                    Text("LOGGED \(latest.date.formatted(.dateTime.weekday(.abbreviated).day().month()).uppercased())")
+                        .font(.flexMono(9))
+                        .tracking(1)
+                        .foregroundStyle(Theme.inkSubtle)
+                } else {
+                    Text("Weigh in weekly, same time of day. The trend matters, not any single number.")
+                        .font(.flexCaption())
+                        .foregroundStyle(Theme.inkSubtle)
                 }
             }
         }
@@ -462,6 +524,97 @@ struct APIKeySheet: View {
         }
         .background(Theme.background)
         .presentationDetents([.medium])
+    }
+}
+
+// MARK: - Log weight sheet
+
+struct LogWeightSheet: View {
+    @Environment(AppStore.self) private var store
+    @Environment(\.dismiss) private var dismiss
+    @State private var kilograms: Double?
+
+    private var canSave: Bool { (kilograms ?? 0) > 0 }
+
+    var body: some View {
+        VStack(spacing: 18) {
+            Capsule()
+                .fill(Theme.inkSubtle.opacity(0.3))
+                .frame(width: 36, height: 5)
+                .padding(.top, 10)
+
+            Text("LOG YOUR WEIGHT")
+                .font(.flexMono(12))
+                .tracking(2)
+                .foregroundStyle(Theme.ink)
+
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                TextField("0.0", value: $kilograms, format: .number)
+                    .keyboardType(.decimalPad)
+                    .multilineTextAlignment(.trailing)
+                    .font(.flexDisplay(46))
+                    .foregroundStyle(Theme.ink)
+                    .frame(maxWidth: 180)
+                Text("KG")
+                    .font(.flexMono(13))
+                    .tracking(2)
+                    .foregroundStyle(Theme.inkSubtle)
+            }
+            .padding(.vertical, 10)
+
+            Text("Same time of day gives the truest trend — most people weigh in first thing in the morning.")
+                .font(.flexCaption())
+                .foregroundStyle(Theme.inkSubtle)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 24)
+
+            if !store.weightEntries.isEmpty {
+                VStack(alignment: .leading, spacing: 8) {
+                    SectionHeader(title: "Recent", subtitle: "Long-press to delete.")
+                    ForEach(store.weightEntries.sorted { $0.date > $1.date }.prefix(5)) { entry in
+                        HStack {
+                            Text(String(format: "%.1f kg", entry.kilograms))
+                                .font(.flexBodyBold())
+                                .foregroundStyle(Theme.ink)
+                            Spacer()
+                            Text(entry.date.formatted(.dateTime.weekday(.abbreviated).day().month()).uppercased())
+                                .font(.flexMono(9))
+                                .tracking(1)
+                                .foregroundStyle(Theme.inkSubtle)
+                        }
+                        .padding(12)
+                        .background(Theme.card)
+                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        .contextMenu {
+                            Button(role: .destructive) {
+                                store.deleteWeight(entry)
+                            } label: {
+                                Label("Delete entry", systemImage: "trash")
+                            }
+                        }
+                    }
+                }
+                .padding(.horizontal, 20)
+            }
+
+            Spacer()
+
+            Button("Save weight") {
+                store.logWeight(kilograms ?? 0)
+                dismiss()
+            }
+            .buttonStyle(PrimaryButtonStyle())
+            .disabled(!canSave)
+            .opacity(canSave ? 1 : 0.4)
+            .padding(.horizontal, 20)
+        }
+        .padding(.bottom, 12)
+        .background(Theme.background)
+        .presentationDetents([.large])
+        .onAppear {
+            // Pre-fill with the last weight — most weigh-ins move a little.
+            if kilograms == nil { kilograms = store.latestWeight?.kilograms }
+        }
     }
 }
 

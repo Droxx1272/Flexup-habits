@@ -362,6 +362,14 @@ struct WorkoutExercise: Identifiable, Codable, Hashable {
     var sets: [ExerciseSet] = [ExerciseSet()]
 }
 
+/// A saved session template — the exercises, without the numbers. Starting
+/// from one beats rebuilding "Push day" from an empty list every time.
+struct Routine: Identifiable, Codable, Hashable {
+    var id = UUID()
+    var name: String
+    var exerciseNames: [String]
+}
+
 struct Workout: Identifiable, Codable, Hashable {
     var id = UUID()
     var title: String
@@ -376,6 +384,14 @@ struct Workout: Identifiable, Codable, Hashable {
     var totalSets: Int {
         exercises.reduce(0) { $0 + $1.sets.count }
     }
+}
+
+// MARK: - Body weight
+
+struct WeightEntry: Identifiable, Codable, Hashable {
+    var id = UUID()
+    var date: Date
+    var kilograms: Double
 }
 
 // MARK: - Progress photos
