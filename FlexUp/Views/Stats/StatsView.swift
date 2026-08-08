@@ -1,10 +1,10 @@
 import SwiftUI
 import Charts
 
-/// The everything-view: today's progress, streaks across all four pillars,
-/// the weekly chart, progress photos, and achievements. One scroll, whole
-/// picture.
-struct StatsView: View {
+/// The proof: streaks across all four pillars, the weekly chart, habits,
+/// body weight, progress photos, and achievements. Presented as the Stats
+/// segment of `TodayView`, so it owns no navigation of its own.
+struct StatsSection: View {
     @Environment(AppStore.self) private var store
     @State private var confirmSignOut = false
     @State private var showHabits = false
@@ -12,29 +12,18 @@ struct StatsView: View {
     private let achievementColumns = [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())]
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
-                    ScreenHeader(title: "Stats", tagline: "The proof, all in one place.")
-                    identityRow
-                    todayCard
-                    pillarTiles
-                    consistencyCard
-                    habitsCard
-                    weightCard
-                    photosSection
-                    achievementsSection
-                    accountSection
-                }
-                .padding(.horizontal, 20)
-                .padding(.bottom, 24)
-            }
-            .scrollIndicators(.hidden)
-            .background(Theme.background)
-            .toolbar(.hidden, for: .navigationBar)
-            .sheet(isPresented: $showHabits) {
-                HabitsSheet()
-            }
+        VStack(alignment: .leading, spacing: 20) {
+            identityRow
+            pillarTiles
+            consistencyCard
+            habitsCard
+            weightCard
+            photosSection
+            achievementsSection
+            accountSection
+        }
+        .sheet(isPresented: $showHabits) {
+            HabitsSheet()
         }
     }
 
@@ -54,42 +43,6 @@ struct StatsView: View {
             }
             Spacer()
         }
-    }
-
-    // MARK: Today
-
-    private var todayCard: some View {
-        let today = store.todayCommitments
-        let done = today.filter { $0.status == .completed }.count
-
-        return FlexCard {
-            HStack(spacing: 16) {
-                ZStack {
-                    ProgressRing(progress: store.todayProgress)
-                        .frame(width: 62, height: 62)
-                    Text("\(done)/\(today.count)")
-                        .font(.system(.subheadline, weight: .bold))
-                        .monospacedDigit()
-                        .foregroundStyle(Theme.ink)
-                }
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("TODAY")
-                        .font(.flexMono(10))
-                        .tracking(2)
-                        .foregroundStyle(Theme.inkSubtle)
-                    Text(todayMessage(done: done, total: today.count))
-                        .font(.flexBodyBold())
-                        .foregroundStyle(Theme.ink)
-                }
-                Spacer()
-            }
-        }
-    }
-
-    private func todayMessage(done: Int, total: Int) -> String {
-        if total == 0 { return "Nothing scheduled. The pillars still count." }
-        if done == total { return "Everything done. Go live your life." }
-        return "\(done) of \(total) done — keep the thread going."
     }
 
     // MARK: Pillars
@@ -302,6 +255,10 @@ struct StatsView: View {
 }
 
 #Preview {
-    StatsView()
-        .environment(AppStore())
+    ScrollView {
+        StatsSection()
+            .padding(20)
+    }
+    .background(Theme.background)
+    .environment(AppStore())
 }

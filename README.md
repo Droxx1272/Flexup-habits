@@ -39,7 +39,7 @@ Four pillars plus the proof — one tab each, nothing buried:
 | **Run** | GPS tracking (Strava-style): live route map while recording, time/distance/pace/elevation, per-km splits, and a run detail view with the route drawn, headline stats, and split pace bars. |
 | **Gym** | Training log (Hevy-style): saved routines you can start from, live session with a rest timer, sets × kg × reps prefilled from your last set, last-session and all-time bests per exercise, volume stats, history. |
 | **Diet** | Calorie tracking (Lose It-style): daily budget ring, four meals, quick-add foods, body-weight logging with a 30-day trend, and meal photos — snap the plate and let AI estimate the calories (Claude Haiku 4.5 vision via the Anthropic API with structured JSON output, ~$0.002/photo; bring-your-own key in v1, backend proxy before release). |
-| **Stats** | The everything-view: today's progress, per-pillar streaks and totals, weekly consistency chart, habit management (add/edit/delete the habits that schedule your days), body-weight trend, progress photos with pose guides and then-vs-now comparison, achievements, account. |
+| **Today** | Where the loop closes, with a **Today / Stats** toggle. **Today**: progress ring, the day's commitments (tap to run a timer, take photo proof, complete, reschedule or skip), plan a one-off, and Quick Start. **Stats**: per-pillar streaks and totals, weekly consistency chart, habit management (add/edit/delete the habits that schedule your days), body-weight trend, progress photos with pose guides and then-vs-now comparison, achievements, account. |
 
 Everything logged can be removed — long-press any run, workout, night, weigh-in, routine, or habit to delete it.
 

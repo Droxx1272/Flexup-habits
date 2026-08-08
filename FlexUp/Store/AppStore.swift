@@ -104,6 +104,7 @@ final class AppStore {
             ))
         }
         generateUpcomingCommitments()
+        updateHabitReminders()
         save()
     }
 
@@ -130,6 +131,7 @@ final class AppStore {
             durationMinutes: durationMinutes
         ))
         generateUpcomingCommitments()
+        updateHabitReminders()
         save()
     }
 
@@ -141,12 +143,14 @@ final class AppStore {
         habits[index] = habit
         removeUpcomingCommitments(forHabit: habit.id)
         generateUpcomingCommitments()
+        updateHabitReminders()
         save()
     }
 
     func deleteHabit(_ habit: Habit) {
         habits.removeAll { $0.id == habit.id }
         removeUpcomingCommitments(forHabit: habit.id)
+        updateHabitReminders()
         save()
     }
 
@@ -157,6 +161,52 @@ final class AppStore {
             commitment.habitID == habitID
                 && commitment.status != .completed
                 && commitment.status != .missed
+        }
+    }
+
+    /// A habit nobody is reminded of is just a note. Each one gets a nudge
+    /// at its scheduled time.
+    ///
+    /// iOS allows 64 pending notifications per app and the wake fallback
+    /// plus bedtime already claim ~49, so habit reminders are capped at 14.
+    private static let habitReminderCap = 14
+
+    func updateHabitReminders() {
+        let center = UNUserNotificationCenter.current()
+        let habitsSnapshot = habits
+
+        center.getPendingNotificationRequests { requests in
+            let stale = requests.map(\.identifier).filter { $0.hasPrefix("habit-") }
+            center.removePendingNotificationRequests(withIdentifiers: stale)
+            guard !habitsSnapshot.isEmpty else { return }
+
+            center.requestAuthorization(options: [.alert, .sound]) { granted, _ in
+                guard granted else { return }
+                var scheduled = 0
+
+                for habit in habitsSnapshot {
+                    for weekday in habit.scheduleWeekdays.sorted() {
+                        guard scheduled < Self.habitReminderCap else { return }
+
+                        var components = DateComponents()
+                        components.weekday = weekday
+                        components.hour = habit.timeOfDay.defaultHour
+                        components.minute = 0
+
+                        let content = UNMutableNotificationContent()
+                        content.title = habit.title
+                        content.body = "\(habit.durationMinutes) minutes. You planned this one."
+                        content.sound = .default
+
+                        center.add(UNNotificationRequest(
+                            identifier: "habit-\(habit.id.uuidString)-\(weekday)",
+                            content: content,
+                            trigger: UNCalendarNotificationTrigger(dateMatching: components, repeats: true)
+                        ))
+                        scheduled += 1
+                    }
+                }
+            }
         }
     }
 

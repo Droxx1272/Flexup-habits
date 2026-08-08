@@ -31,7 +31,8 @@ FlexUp is a SwiftUI iOS app (iOS 17+, Xcode 16 folder-synchronized project, zero
 - Typography voices: `.flexDisplay()` (huge black uppercase titles), `.flexMono()` with `.tracking(1–3)` (UPPERCASE eyebrows/taglines), `.flexStat()` (big numerals), `.flexBody/.flexCaption` for quiet text.
 - Components in `FlexUp/DesignSystem/Components.swift`: `ScreenHeader` (every tab), `FlexCard`, `PrimaryButtonStyle` (ink pill — one per screen), `SecondaryButtonStyle`, `TrackStat`, `SelectableChip`, `SegmentPills`, `IconBadge`, `AvatarStack`.
 - No XP/levels/follower counts/infinite scroll. Calm, whitespace-heavy, one primary CTA per screen.
-- Dormant (built but out of the tab bar, kept for later): Home, Discover, Squad (feed + memories), Calendar, Track hub, Profile — they must keep compiling.
+- Dormant (built but out of the tab bar, kept for later): Home, Discover, Squad (feed + memories), Calendar, Track hub, Profile — they must keep compiling. `CommitmentDetailSheet`, `CommitmentRow` and `PlanSheet` live under those folders but **are** reachable from `TodayView`.
+- Tabs are Wake · Run · Gym · Diet · Today. `TodayView` owns the navigation and toggles between the commitments list and `StatsSection` (a plain content view with no navigation of its own, like `RunSection`/`LiftSection`/`FuelSection`).
 
 ## Wake alarm constraints
 

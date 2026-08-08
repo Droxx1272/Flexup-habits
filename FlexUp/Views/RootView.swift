@@ -36,8 +36,8 @@ struct MainTabView: View {
                 .tabItem { Label("Gym", systemImage: "dumbbell.fill") }
             DietTabView()
                 .tabItem { Label("Diet", systemImage: "fork.knife") }
-            StatsView()
-                .tabItem { Label("Stats", systemImage: "chart.bar.fill") }
+            TodayView()
+                .tabItem { Label("Today", systemImage: "checklist") }
         }
         .tint(Theme.accent)
     }
