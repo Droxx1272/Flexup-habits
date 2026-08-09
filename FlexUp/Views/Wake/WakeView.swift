@@ -80,6 +80,10 @@ struct WakeView: View {
                     .minimumScaleFactor(0.5)
                     .lineLimit(1)
 
+                if store.wake.enabled {
+                    alarmModeBadge
+                }
+
                 HStack(spacing: 14) {
                     flowStep(icon: "alarm", label: "Alarm rings")
                     Image(systemName: "arrow.right")
@@ -104,6 +108,25 @@ struct WakeView: View {
                 .buttonStyle(store.wake.enabled ? SecondaryButtonStyle() : SecondaryButtonStyle(tint: Theme.background, background: Theme.ink))
             }
         }
+    }
+
+    /// Says plainly which mechanism is live. A real alarm rings through
+    /// silent; the fallback is muted by the ring switch, and that's worth
+    /// knowing before you trust it to wake you.
+    private var alarmModeBadge: some View {
+        let isReal = store.isWakeAlarmReal
+        return HStack(spacing: 6) {
+            Image(systemName: isReal ? "bell.badge.fill" : "bell.slash.fill")
+                .font(.system(size: 10, weight: .bold))
+            Text(isReal ? "REAL ALARM · RINGS ON SILENT" : "NOTIFICATION ONLY · SILENT MUTES IT")
+                .font(.flexMono(9))
+                .tracking(1)
+        }
+        .foregroundStyle(isReal ? Theme.accent : Theme.amber)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background((isReal ? Theme.accent : Theme.amber).opacity(0.12))
+        .clipShape(Capsule())
     }
 
     private func flowStep(icon: String, label: String) -> some View {

@@ -602,6 +602,15 @@ final class AppStore {
         wakeCheckInDays.contains(dayKey())
     }
 
+    /// True when a real AlarmKit alarm is scheduled (rings through the mute
+    /// switch); false means the notification fallback is carrying the
+    /// morning. Surfaced in the UI so which path is live is verifiable
+    /// rather than guesswork — building with an SDK older than iOS 26
+    /// compiles AlarmKit out entirely.
+    var isWakeAlarmReal: Bool {
+        wake.enabled && wake.alarmID != nil
+    }
+
     /// Consecutive scheduled wake days checked in, counting back from today
     /// (an unchecked today doesn't break the streak yet).
     var wakeStreak: Int {
