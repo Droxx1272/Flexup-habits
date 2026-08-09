@@ -77,6 +77,58 @@ enum SampleData {
         QuickFood(name: "Handful of nuts", calories: 170),
     ]
 
+    /// Calories a photo can't see. Cooking fat is the single biggest source
+    /// of error in photo estimation — a curry looks identical whether it was
+    /// finished with a spoon of ghee or nothing at all.
+    struct HiddenIngredient: Identifiable, Hashable {
+        var id: String { name }
+        var name: String
+        var calories: Int
+        var portion: String
+    }
+
+    static let hiddenIngredients: [HiddenIngredient] = [
+        HiddenIngredient(name: "Cooking oil", calories: 120, portion: "1 tbsp"),
+        HiddenIngredient(name: "Ghee", calories: 112, portion: "1 tbsp"),
+        HiddenIngredient(name: "Butter", calories: 102, portion: "1 tbsp"),
+        HiddenIngredient(name: "Olive oil", calories: 119, portion: "1 tbsp"),
+        HiddenIngredient(name: "Cream", calories: 52, portion: "1 tbsp"),
+        HiddenIngredient(name: "Coconut milk", calories: 111, portion: "1/4 cup"),
+        HiddenIngredient(name: "Sugar", calories: 16, portion: "1 tsp"),
+        HiddenIngredient(name: "Mayonnaise", calories: 94, portion: "1 tbsp"),
+        HiddenIngredient(name: "Cheese", calories: 113, portion: "1 slice"),
+        HiddenIngredient(name: "Nuts / seeds", calories: 170, portion: "small handful"),
+        HiddenIngredient(name: "Deep fried", calories: 130, portion: "absorbed oil"),
+        HiddenIngredient(name: "Dressing / sauce", calories: 75, portion: "1 tbsp"),
+    ]
+
+    /// Starting points for the cooking context. Western food databases
+    /// systematically misjudge these cuisines, so telling the model which
+    /// one you cook in is the highest-leverage correction available.
+    static let cuisinePresets: [String] = [
+        "North Indian home cooking",
+        "South Indian home cooking",
+        "Pakistani / Punjabi",
+        "Bangladeshi / Bengali",
+        "Chinese home cooking",
+        "Japanese",
+        "Korean",
+        "Thai",
+        "Vietnamese",
+        "Filipino",
+        "Middle Eastern / Levantine",
+        "Turkish",
+        "Persian",
+        "West African",
+        "Ethiopian",
+        "North African / Maghrebi",
+        "Mexican",
+        "Brazilian",
+        "Caribbean",
+        "Mediterranean",
+        "American / Western",
+    ]
+
     static let friends: [Friend] = [
         Friend(name: "Aman"),
         Friend(name: "Sarah"),

@@ -38,10 +38,21 @@ Four pillars plus the proof — one tab each, nothing buried:
 | **Wake** | Wake/Sleep toggle. **Wake**: Erly-style wake time with a real alarm (AlarmKit on iOS 26+ — rings through the mute switch like the Clock app; older systems fall back to a burst of Time Sensitive notifications 40s apart that stop the moment you check in), morning check-in (photo of the sky counts), weekly streak strip, and a 5-second alarm preview. **Sleep**: bedtime reminder, log-last-night flow (bedtime/wake time pickers + quality rating), duration/quality history, 7-day average and night streak. No snoozing, no backup alarms. |
 | **Run** | GPS tracking (Strava-style): live route map while recording, time/distance/pace/elevation, per-km splits, and a run detail view with the route drawn, headline stats, and split pace bars. |
 | **Gym** | Training log (Hevy-style): saved routines you can start from, live session with a rest timer, sets × kg × reps prefilled from your last set, last-session and all-time bests per exercise, volume stats, history. |
-| **Diet** | Calorie tracking (Lose It-style): daily budget ring, four meals, quick-add foods, body-weight logging with a 30-day trend, and meal photos — snap the plate and let AI estimate the calories (Claude Haiku 4.5 vision via the Anthropic API with structured JSON output, ~$0.002/photo; bring-your-own key in v1, backend proxy before release). |
+| **Diet** | Calorie tracking (Lose It-style): daily budget ring, four meals, quick-add foods, body-weight logging with a 30-day trend, and photo estimation built for real plates — see below. |
 | **Today** | Where the loop closes, with a **Today / Stats** toggle. **Today**: progress ring, the day's commitments (tap to run a timer, take photo proof, complete, reschedule or skip), plan a one-off, and Quick Start. **Stats**: per-pillar streaks and totals, weekly consistency chart, habit management (add/edit/delete the habits that schedule your days), body-weight trend, progress photos with pose guides and then-vs-now comparison, achievements, account. |
 
 Everything logged can be removed — long-press any run, workout, night, weigh-in, routine, or habit to delete it.
+
+## Photo calorie estimation
+
+Snap a plate and Claude Haiku 4.5 vision returns an **itemised** estimate (~$0.002/photo, structured JSON output). A single number is untrustworthy, so the flow is built around correcting it:
+
+- **Tap to adjust any portion.** Each component gets its own row with the portion the model believed it saw; − / + scale it in quarter steps and the total updates live.
+- **Add what the photo missed.** Cooking fat is invisible in a photo and is the biggest single source of error — one tap adds ghee, oil, butter, cream, coconut milk, deep-frying and more.
+- **Correct it by voice or text.** Say or type "cooked in mustard oil, only two rotis" and re-estimate; the correction is passed to the model as authoritative. Hand-added ingredients survive the re-run.
+- **Teach it your kitchen once.** A persisted cuisine context ("North Indian home cooking, mustard oil, moderate ghee") ships with every request, so regional and mixed dishes stop being scored against Western database equivalents. 21 presets, or write your own.
+
+Bring-your-own API key in v1; a backend proxy replaces it before release.
 
 Discover, Squad (social feed + memories), Calendar, Activity detail, and the coach remain in the codebase but out of the nav — the navigation stays simple until the pillars are solid.
 

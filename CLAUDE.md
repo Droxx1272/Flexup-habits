@@ -22,7 +22,7 @@ FlexUp is a SwiftUI iOS app (iOS 17+, Xcode 16 folder-synchronized project, zero
 - Every log type has a delete on the store (`deleteRun`/`deleteWorkout`/`deleteSleep`/`deleteFood`/`deleteWeight`/`deleteRoutine`/`deleteHabit`), surfaced in the UI via `.contextMenu` — rows live in `ScrollView`s, not `List`s, so `.swipeActions` won't work.
 - Editing a habit (`updateHabit`) re-materializes only its **upcoming** commitments; completed and missed ones are never touched, so history stays honest.
 - Images: always render via `AsyncPhotoView` (downsampled, cached, off-main-thread — `FlexUp/Support/ImageLoading.swift`); save captures via `UIImage.flexJPEGData()` (1600px cap). Never `UIImage(contentsOfFile:)` in a view body.
-- AI calorie estimation (`FlexUp/AI/CalorieEstimator.swift`) calls the Anthropic API directly with an on-device key — prototype only; a backend proxy replaces this before release.
+- AI calorie estimation (`FlexUp/AI/CalorieEstimator.swift`) calls the Anthropic API directly with an on-device key — prototype only; a backend proxy replaces this before release. It returns an **itemised** `MealEstimate` (per-component name/portion/calories) which `AddFoodSheet` turns into editable `FoodItem`s; accuracy comes from the prompt, which folds in `store.cuisineContext` and the user's spoken/typed correction. `VoiceDictation` (Speech framework) backs the mic button and needs the microphone + speech-recognition usage descriptions already in build settings.
 - Auth is on-device (`Account` in the store): Sign in with Apple + email fallback. Sign in with Apple needs the capability + paid developer account; the email path always works.
 
 ## Design system (match it exactly)

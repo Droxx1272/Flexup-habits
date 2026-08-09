@@ -338,6 +338,30 @@ enum MealType: String, Codable, CaseIterable, Identifiable {
     }
 }
 
+/// One component of a meal. The estimator proposes a name, a portion it
+/// believes it sees, and the calories for that portion; the user scales it
+/// with `multiplier` rather than retyping numbers.
+struct FoodItem: Identifiable, Codable, Hashable {
+    var id = UUID()
+    var name: String
+    /// Calories for the portion described in `portion`, before adjustment.
+    var baseCalories: Int
+    var portion: String
+    var multiplier: Double = 1
+    /// True for things the user added by hand — cooking fats and other
+    /// ingredients a photo can't show.
+    var isAddOn: Bool = false
+
+    var calories: Int { Int((Double(baseCalories) * multiplier).rounded()) }
+
+    var multiplierLabel: String {
+        multiplier == multiplier.rounded()
+            ? "\(Int(multiplier))×"
+            : String(format: "%.2f×", multiplier)
+                .replacingOccurrences(of: "0×", with: "×")
+    }
+}
+
 struct FoodEntry: Identifiable, Codable, Hashable {
     var id = UUID()
     var name: String
@@ -346,6 +370,9 @@ struct FoodEntry: Identifiable, Codable, Hashable {
     var date: Date = .now
     /// Optional meal photo, stored in the app's photo directory.
     var photoFileName: String?
+    /// Per-component breakdown when the entry came from a photo estimate.
+    /// Optional so entries saved before itemisation still decode.
+    var items: [FoodItem]?
 }
 
 // MARK: - Lift (training log)

@@ -25,6 +25,9 @@ final class AppStore {
     var foodEntries: [FoodEntry] = []
     var progressPhotos: [ProgressPhoto] = []
     var calorieBudget: Int = 2200
+    /// How this person actually cooks, in their words. Fed to the photo
+    /// estimator so regional dishes aren't scored against Western recipes.
+    var cuisineContext: String = ""
     var wake = WakeConfig()
     var wakeCheckInDays: Set<String> = []
     var bedtime = BedtimeConfig()
@@ -570,11 +573,26 @@ final class AppStore {
 
     // MARK: - Fuel
 
-    func addFood(name: String, calories: Int, meal: MealType, photoData: Data? = nil) {
+    func addFood(
+        name: String,
+        calories: Int,
+        meal: MealType,
+        photoData: Data? = nil,
+        items: [FoodItem]? = nil
+    ) {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, calories > 0 else { return }
         let fileName = photoData.flatMap { saveImage($0) }
-        foodEntries.insert(FoodEntry(name: trimmed, calories: calories, meal: meal, photoFileName: fileName), at: 0)
+        foodEntries.insert(
+            FoodEntry(
+                name: trimmed,
+                calories: calories,
+                meal: meal,
+                photoFileName: fileName,
+                items: (items?.isEmpty ?? true) ? nil : items
+            ),
+            at: 0
+        )
         save()
     }
 
@@ -1241,6 +1259,7 @@ final class AppStore {
         var foodEntries: [FoodEntry]?
         var progressPhotos: [ProgressPhoto]?
         var calorieBudget: Int?
+        var cuisineContext: String?
         var wake: WakeConfig?
         var wakeCheckInDays: Set<String>?
         var bedtime: BedtimeConfig?
@@ -1279,6 +1298,7 @@ final class AppStore {
             foodEntries: foodEntries,
             progressPhotos: progressPhotos,
             calorieBudget: calorieBudget,
+            cuisineContext: cuisineContext,
             wake: wake,
             wakeCheckInDays: wakeCheckInDays,
             bedtime: bedtime,
@@ -1321,6 +1341,7 @@ final class AppStore {
         foodEntries = snapshot.foodEntries ?? []
         progressPhotos = snapshot.progressPhotos ?? []
         calorieBudget = snapshot.calorieBudget ?? 2200
+        cuisineContext = snapshot.cuisineContext ?? ""
         wake = snapshot.wake ?? WakeConfig()
         wakeCheckInDays = snapshot.wakeCheckInDays ?? []
         bedtime = snapshot.bedtime ?? BedtimeConfig()

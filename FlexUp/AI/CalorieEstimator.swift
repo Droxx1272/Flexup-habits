@@ -4,21 +4,40 @@ import UIKit
 /// AI calorie estimation from a meal photo, via the Anthropic Messages API.
 ///
 /// The photo is downscaled, base64-encoded, and sent with a JSON-schema
-/// structured output so the reply is guaranteed to parse. v1 calls the API
-/// directly with a user-provided key stored on device — before any public
-/// release this must move behind a backend proxy so the key never ships
-/// in the app.
-struct FoodEstimate: Decodable {
-    let foodName: String
-    let calories: Int
+/// structured output so the reply is guaranteed to parse. The model returns
+/// an itemised breakdown rather than one number, because a plate is many
+/// portions and the user needs to correct them individually.
+///
+/// Two inputs beyond the photo carry most of the accuracy: the user's
+/// cooking context (Western databases badly misjudge regional dishes) and a
+/// free-text correction for anything the camera can't see — the spoon of
+/// ghee, the deep-frying, the dressing already mixed in.
+///
+/// v1 calls the API directly with a user-provided key stored on device —
+/// before any public release this must move behind a backend proxy so the
+/// key never ships in the app.
+struct MealEstimate: Decodable {
+    let mealName: String
+    let items: [Item]
     let confidence: String
     let notes: String
 
+    struct Item: Decodable {
+        let name: String
+        let calories: Int
+        let portion: String
+    }
+
     enum CodingKeys: String, CodingKey {
-        case foodName = "food_name"
-        case calories
+        case mealName = "meal_name"
+        case items
         case confidence
         case notes
+    }
+
+    /// Convert to the editable model the review UI drives.
+    var foodItems: [FoodItem] {
+        items.map { FoodItem(name: $0.name, baseCalories: max(0, $0.calories), portion: $0.portion) }
     }
 }
 
@@ -48,25 +67,26 @@ enum CalorieEstimator {
     /// "claude-opus-4-8" if estimates trend inaccurate.
     private static let model = "claude-haiku-4-5"
 
-    private static let prompt = """
-    Estimate the food in this photo for a calorie-tracking app. Identify \
-    what the meal is (a short name, max 4 words) and estimate the total \
-    calories for the visible portion, being realistic about portion size. \
-    If there are multiple items, sum them and give the meal a brief \
-    combined name. In notes, list the main components and portion \
-    assumptions in one short sentence.
-    """
-
     private static let outputSchema: [String: Any] = [
         "type": "object",
         "properties": [
-            "food_name": [
+            "meal_name": [
                 "type": "string",
-                "description": "Short name for the meal, max 4 words",
+                "description": "Short name for the whole meal, max 5 words. Use the dish's real name where you can identify it.",
             ],
-            "calories": [
-                "type": "integer",
-                "description": "Estimated total kcal for the visible portion",
+            "items": [
+                "type": "array",
+                "description": "Each distinct component of the meal, listed separately.",
+                "items": [
+                    "type": "object",
+                    "properties": [
+                        "name": ["type": "string", "description": "Component name, e.g. 'Dal', 'Rice', 'Roti'"],
+                        "calories": ["type": "integer", "description": "Calories for the portion described"],
+                        "portion": ["type": "string", "description": "The portion you estimated, e.g. '1 cup', '2 pieces', '150 g'"],
+                    ],
+                    "required": ["name", "calories", "portion"],
+                    "additionalProperties": false,
+                ],
             ],
             "confidence": [
                 "type": "string",
@@ -74,21 +94,26 @@ enum CalorieEstimator {
             ],
             "notes": [
                 "type": "string",
-                "description": "One sentence: components and portion assumptions",
+                "description": "One short sentence on the main assumption you made, especially about cooking fat or portion size.",
             ],
         ],
-        "required": ["food_name", "calories", "confidence", "notes"],
+        "required": ["meal_name", "items", "confidence", "notes"],
         "additionalProperties": false,
     ]
 
-    static func estimate(image: UIImage, apiKey: String) async throws -> FoodEstimate {
+    static func estimate(
+        image: UIImage,
+        apiKey: String,
+        cuisineContext: String = "",
+        correction: String = ""
+    ) async throws -> MealEstimate {
         let key = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !key.isEmpty else { throw CalorieEstimatorError.missingKey }
         guard let jpeg = downscaledJPEG(from: image) else { throw CalorieEstimatorError.badImage }
 
         let body: [String: Any] = [
             "model": model,
-            "max_tokens": 1024,
+            "max_tokens": 1500,
             "output_config": [
                 "format": [
                     "type": "json_schema",
@@ -107,7 +132,7 @@ enum CalorieEstimator {
                                 "data": jpeg.base64EncodedString(),
                             ],
                         ],
-                        ["type": "text", "text": prompt],
+                        ["type": "text", "text": prompt(cuisineContext: cuisineContext, correction: correction)],
                     ],
                 ],
             ],
@@ -142,10 +167,64 @@ enum CalorieEstimator {
             throw CalorieEstimatorError.malformed
         }
         do {
-            return try JSONDecoder().decode(FoodEstimate.self, from: jsonData)
+            return try JSONDecoder().decode(MealEstimate.self, from: jsonData)
         } catch {
             throw CalorieEstimatorError.malformed
         }
+    }
+
+    /// The prompt does the heavy lifting on regional accuracy: it names the
+    /// user's cuisine, tells the model not to default to Western portions,
+    /// and folds in whatever correction the user spoke or typed.
+    private static func prompt(cuisineContext: String, correction: String) -> String {
+        var lines = [
+            """
+            Estimate the calories in this meal photo for a tracking app. Break the \
+            plate into its distinct components and give each one its own line with \
+            the portion you think you see and the calories for that portion.
+            """,
+            """
+            Be realistic about cooking fat. Photos cannot show oil, ghee, butter, \
+            cream or sugar that is already cooked into a dish, and under-counting \
+            it is the most common way these estimates go wrong. Assume normal \
+            home-cooking amounts for the cuisine unless the food looks dry or \
+            explicitly plain.
+            """,
+        ]
+
+        if cuisineContext.trimmingCharacters(in: .whitespaces).isEmpty {
+            lines.append(
+                """
+                Identify the cuisine from the photo and use portion sizes and \
+                recipes typical of that cuisine. Do not substitute a generic \
+                Western equivalent for a regional dish — name the actual dish \
+                where you recognise it.
+                """
+            )
+        } else {
+            lines.append(
+                """
+                The person eating this describes their cooking as: \
+                "\(cuisineContext.trimmingCharacters(in: .whitespaces))". Use the \
+                dish names, typical recipes, cooking fats and portion sizes of \
+                that cuisine rather than Western database equivalents, which \
+                routinely misjudge these dishes.
+                """
+            )
+        }
+
+        let trimmedCorrection = correction.trimmingCharacters(in: .whitespaces)
+        if !trimmedCorrection.isEmpty {
+            lines.append(
+                """
+                The person has added this correction about the meal, which the \
+                photo may not show — treat it as authoritative and fold it into \
+                your estimate: "\(trimmedCorrection)"
+                """
+            )
+        }
+
+        return lines.joined(separator: "\n\n")
     }
 
     /// Meal photos don't need full resolution — cap the long edge so the
