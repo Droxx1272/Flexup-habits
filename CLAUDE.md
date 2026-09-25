@@ -1,6 +1,6 @@
 # FlexUp — notes for Claude Code sessions
 
-FlexUp is a SwiftUI iOS app (iOS 17+, Xcode 16 folder-synchronized project, zero third-party dependencies). Read `README.md` for the product vision. The core loop is **Plan → Commit → Do → Verify → Celebrate → Repeat**; the four pillars are **Wake, Run, Gym, Diet**, plus a **Stats** tab.
+FlexUp is a SwiftUI iOS app (iOS 17+, Xcode 16 folder-synchronized project, zero third-party dependencies). Read `README.md` for the product vision. The core loop is **Plan → Commit → Do → Verify → Celebrate → Repeat**; the four pillars are **Wake, Run, Gym, Diet**, plus a **Today** tab (commitments · Progress · Stats).
 
 ## Build & verify
 
@@ -23,6 +23,9 @@ FlexUp is a SwiftUI iOS app (iOS 17+, Xcode 16 folder-synchronized project, zero
 - Editing a habit (`updateHabit`) re-materializes only its **upcoming** commitments; completed and missed ones are never touched, so history stays honest.
 - Images: always render via `AsyncPhotoView` (downsampled, cached, off-main-thread — `FlexUp/Support/ImageLoading.swift`); save captures via `UIImage.flexJPEGData()` (1600px cap). Never `UIImage(contentsOfFile:)` in a view body.
 - AI calorie estimation (`FlexUp/AI/CalorieEstimator.swift`) calls the Anthropic API directly with an on-device key — prototype only; a backend proxy replaces this before release. It returns an **itemised** `MealEstimate` (per-component name/portion/calories) which `AddFoodSheet` turns into editable `FoodItem`s; accuracy comes from the prompt, which folds in `store.cuisineContext` and the user's spoken/typed correction. `VoiceDictation` (Speech framework) backs the mic button and needs the microphone + speech-recognition usage descriptions already in build settings.
+- Nutrition: `FoodEntry.macros` / `FoodItem.baseMacros` are optional `Macros` (nil = calories only — never fake zeros; the Diet tab reports how many kcal have macro data). `store.nutritionGoals` holds all daily targets; `calorieBudget` is a computed alias onto it. Food can be logged to a past day via `addFood(date:)` / `logDate(for:meal:)`. Water lives in `waterByDay` keyed by `dayKey`.
+- Progress (`FlexUp/Views/Progress/ProgressSection.swift`) reads only store range helpers (`runDistanceSeries`, `sleepSeries`, `calorieSeries`, … via the private `series(_:in:perDay:perBucket:)`), which bucket by day for 7D/30D and by week for 90D/1Y and emit no point for unlogged days.
+- The intro (`FlexUp/Views/Intro/IntroView.swift`) gates on `store.hasSeenIntro` before `AuthView`; older saves default it to "seen" when an account exists.
 - Auth is on-device (`Account` in the store): Sign in with Apple + email fallback. Sign in with Apple needs the capability + paid developer account; the email path always works.
 
 ## Design system (match it exactly)
@@ -32,7 +35,7 @@ FlexUp is a SwiftUI iOS app (iOS 17+, Xcode 16 folder-synchronized project, zero
 - Components in `FlexUp/DesignSystem/Components.swift`: `ScreenHeader` (every tab), `FlexCard`, `PrimaryButtonStyle` (ink pill — one per screen), `SecondaryButtonStyle`, `TrackStat`, `SelectableChip`, `SegmentPills`, `IconBadge`, `AvatarStack`.
 - No XP/levels/follower counts/infinite scroll. Calm, whitespace-heavy, one primary CTA per screen.
 - Dormant (built but out of the tab bar, kept for later): Home, Discover, Squad (feed + memories), Calendar, Track hub, Profile — they must keep compiling. `CommitmentDetailSheet`, `CommitmentRow` and `PlanSheet` live under those folders but **are** reachable from `TodayView`.
-- Tabs are Wake · Run · Gym · Diet · Today. `TodayView` owns the navigation and toggles between the commitments list and `StatsSection` (a plain content view with no navigation of its own, like `RunSection`/`LiftSection`/`FuelSection`).
+- Tabs are Wake · Run · Gym · Diet · Today. `TodayView` owns the navigation and toggles between the commitments list, `ProgressSection` and `StatsSection` (plain content views with no navigation of their own, like `RunSection`/`LiftSection`/`FuelSection`).
 
 ## Wake alarm constraints
 

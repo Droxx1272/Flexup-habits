@@ -1,49 +1,113 @@
 import SwiftUI
 import UIKit
+import Charts
 
-/// Calorie tracking, deliberately simple: a daily budget, four meals,
-/// quick-add foods — and snap the plate while you're at it.
+/// Nutrition without the noise: step through any day, calories against a
+/// budget, macros against goals, water, the week at a glance — and snap the
+/// plate for an itemised estimate you can correct.
 struct FuelSection: View {
     @Environment(AppStore.self) private var store
+    @State private var day: Date = Calendar.current.startOfDay(for: .now)
     @State private var showAddFood = false
     @State private var addMeal: MealType = .breakfast
-    @State private var showBudgetEdit = false
+    @State private var showGoals = false
     @State private var showLogWeight = false
+    @State private var selectedEntry: FoodEntry?
 
-    private var consumed: Int { store.caloriesToday }
-    private var budget: Int { store.calorieBudget }
-    private var remaining: Int { budget - consumed }
+    private var calendar: Calendar { .current }
+    private var isToday: Bool { calendar.isDateInToday(day) }
+    private var goals: NutritionGoals { store.nutritionGoals }
+    private var consumed: Int { store.calories(on: day) }
+    private var remaining: Int { goals.calories - consumed }
+    private var macros: Macros { store.macros(on: day) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
+            daySwitcher
             budgetCard
 
             Button {
-                addMeal = suggestedMeal
+                addMeal = isToday ? suggestedMeal : .dinner
                 showAddFood = true
             } label: {
                 HStack(spacing: 10) {
                     Image(systemName: "fork.knife")
-                    Text("Log food")
+                    Text(isToday ? "Log food" : "Log food for this day")
                 }
             }
             .buttonStyle(PrimaryButtonStyle())
+
+            macrosCard
 
             ForEach(MealType.allCases) { meal in
                 mealCard(meal)
             }
 
+            waterCard
+            weekCard
             weightCard
         }
         .sheet(isPresented: $showLogWeight) {
             LogWeightSheet()
         }
         .sheet(isPresented: $showAddFood) {
-            AddFoodSheet(meal: addMeal)
+            AddFoodSheet(meal: addMeal, day: day)
         }
-        .sheet(isPresented: $showBudgetEdit) {
-            BudgetSheet()
+        .sheet(isPresented: $showGoals) {
+            NutritionGoalsSheet()
         }
+        .sheet(item: $selectedEntry) { entry in
+            FoodEntryDetailSheet(entry: entry)
+        }
+    }
+
+    // MARK: Day switcher
+
+    /// Forgot yesterday's dinner? Step back and log it where it belongs.
+    private var daySwitcher: some View {
+        HStack {
+            dayButton("chevron.left", enabled: true) { shiftDay(-1) }
+            Spacer()
+            VStack(spacing: 3) {
+                Text(isToday ? "TODAY" : (calendar.isDateInYesterday(day) ? "YESTERDAY" : day.formatted(.dateTime.weekday(.wide)).uppercased()))
+                    .font(.flexMono(12))
+                    .tracking(2)
+                    .foregroundStyle(Theme.ink)
+                Text(day.formatted(.dateTime.day().month(.wide).year()).uppercased())
+                    .font(.flexMono(9))
+                    .tracking(1)
+                    .foregroundStyle(Theme.inkSubtle)
+            }
+            .contentShape(Rectangle())
+            .onTapGesture {
+                withAnimation(.spring(duration: 0.25)) { day = calendar.startOfDay(for: .now) }
+            }
+            Spacer()
+            dayButton("chevron.right", enabled: !isToday) { shiftDay(1) }
+        }
+        .padding(6)
+        .background(Theme.card)
+        .clipShape(Capsule())
+    }
+
+    private func dayButton(_ icon: String, enabled: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: icon)
+                .font(.system(size: 13, weight: .bold))
+                .foregroundStyle(Theme.ink)
+                .frame(width: 38, height: 38)
+                .background(Theme.background)
+                .clipShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .disabled(!enabled)
+        .opacity(enabled ? 1 : 0.3)
+    }
+
+    private func shiftDay(_ offset: Int) {
+        guard let next = calendar.date(byAdding: .day, value: offset, to: day),
+              next <= calendar.startOfDay(for: .now) else { return }
+        withAnimation(.spring(duration: 0.25)) { day = next }
     }
 
     // MARK: Budget
@@ -52,7 +116,7 @@ struct FuelSection: View {
         FlexCard {
             HStack(spacing: 18) {
                 ZStack {
-                    ProgressRing(progress: budget > 0 ? min(1, Double(consumed) / Double(budget)) : 0)
+                    ProgressRing(progress: goals.calories > 0 ? min(1, Double(consumed) / Double(goals.calories)) : 0)
                         .frame(width: 84, height: 84)
                     VStack(spacing: 1) {
                         Text("\(abs(remaining))")
@@ -67,17 +131,23 @@ struct FuelSection: View {
                     }
                 }
                 VStack(alignment: .leading, spacing: 5) {
-                    Text("TODAY'S FUEL")
+                    Text(isToday ? "TODAY'S FUEL" : "THIS DAY'S FUEL")
                         .font(.flexMono(10))
                         .tracking(2)
                         .foregroundStyle(Theme.inkSubtle)
-                    Text("\(consumed) of \(budget) kcal")
+                    Text("\(consumed) of \(goals.calories) kcal")
                         .font(.flexBodyBold())
                         .foregroundStyle(Theme.ink)
+                    if store.foodLogStreak > 1 {
+                        Text("\(store.foodLogStreak)-DAY LOGGING STREAK")
+                            .font(.flexMono(9))
+                            .tracking(1)
+                            .foregroundStyle(Theme.accent)
+                    }
                     Button {
-                        showBudgetEdit = true
+                        showGoals = true
                     } label: {
-                        Text("EDIT BUDGET")
+                        Text("EDIT GOALS")
                             .font(.flexMono(9))
                             .tracking(1)
                             .foregroundStyle(Theme.accent)
@@ -89,10 +159,94 @@ struct FuelSection: View {
         }
     }
 
+    // MARK: Macros
+
+    private var macrosCard: some View {
+        let known = store.caloriesWithMacros(on: day)
+        let split = macros.calorieSplit
+        let splitTotal = split.protein + split.carbs + split.fat
+
+        return FlexCard(padding: 16) {
+            VStack(alignment: .leading, spacing: 14) {
+                HStack(alignment: .center) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("MACROS")
+                            .font(.flexMono(11))
+                            .tracking(1.5)
+                            .foregroundStyle(Theme.ink)
+                        if splitTotal > 0 {
+                            Text("P \(percent(split.protein, of: splitTotal))% · C \(percent(split.carbs, of: splitTotal))% · F \(percent(split.fat, of: splitTotal))% OF ENERGY")
+                                .font(.flexMono(9))
+                                .tracking(1)
+                                .foregroundStyle(Theme.inkSubtle)
+                        } else {
+                            Text("LOG FOOD TO SEE YOUR SPLIT")
+                                .font(.flexMono(9))
+                                .tracking(1)
+                                .foregroundStyle(Theme.inkSubtle)
+                        }
+                    }
+                    Spacer()
+                    if splitTotal > 0 {
+                        Chart {
+                            SectorMark(angle: .value("Protein", split.protein), innerRadius: .ratio(0.62), angularInset: 1.5)
+                                .foregroundStyle(MacroKind.protein.color)
+                            SectorMark(angle: .value("Carbs", split.carbs), innerRadius: .ratio(0.62), angularInset: 1.5)
+                                .foregroundStyle(MacroKind.carbs.color)
+                            SectorMark(angle: .value("Fat", split.fat), innerRadius: .ratio(0.62), angularInset: 1.5)
+                                .foregroundStyle(MacroKind.fat.color)
+                        }
+                        .frame(width: 52, height: 52)
+                    }
+                }
+
+                MacroBar(kind: .protein, value: macros.protein, goal: goals.protein)
+                MacroBar(kind: .carbs, value: macros.carbs, goal: goals.carbs)
+                MacroBar(kind: .fat, value: macros.fat, goal: goals.fat)
+
+                Rectangle()
+                    .fill(Theme.inkSubtle.opacity(0.15))
+                    .frame(height: 1)
+
+                HStack(spacing: 0) {
+                    microStat("FIBRE", "\(Int(macros.fiber.rounded()))/\(goals.fiber)g")
+                    microStat("SUGAR", "\(Int(macros.sugar.rounded()))g")
+                    microStat("SODIUM", "\(Int(macros.sodiumMg.rounded()))mg")
+                }
+
+                if consumed > 0 && known < consumed {
+                    Text("Macros cover \(known) of \(consumed) kcal — entries logged with calories only aren't counted here.")
+                        .font(.flexCaption())
+                        .foregroundStyle(Theme.amber)
+                }
+            }
+        }
+    }
+
+    private func percent(_ part: Double, of total: Double) -> Int {
+        total > 0 ? Int((part / total * 100).rounded()) : 0
+    }
+
+    private func microStat(_ label: String, _ value: String) -> some View {
+        VStack(spacing: 3) {
+            Text(value)
+                .font(.flexBodyBold())
+                .monospacedDigit()
+                .foregroundStyle(Theme.ink)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+            Text(label)
+                .font(.flexMono(8))
+                .tracking(1.5)
+                .foregroundStyle(Theme.inkSubtle)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
     // MARK: Meals
 
     private func mealCard(_ meal: MealType) -> some View {
-        let entries = store.todayFood(for: meal)
+        let entries = store.food(on: day, meal: meal)
         let total = entries.reduce(0) { $0 + $1.calories }
 
         return FlexCard(padding: 14) {
@@ -129,30 +283,164 @@ struct FuelSection: View {
                         .foregroundStyle(Theme.inkSubtle)
                 } else {
                     ForEach(entries) { entry in
-                        HStack {
-                            if let fileName = entry.photoFileName {
-                                AsyncPhotoView(url: store.imageURL(fileName: fileName), maxPixel: 100)
-                                    .frame(width: 34, height: 34)
-                                    .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
-                            }
-                            Text(entry.name)
-                                .font(.flexBody())
-                                .foregroundStyle(Theme.ink)
-                            Spacer()
-                            Text("\(entry.calories)")
-                                .font(.flexBodyBold())
-                                .monospacedDigit()
-                                .foregroundStyle(Theme.ink)
+                        Button {
+                            selectedEntry = entry
+                        } label: {
+                            FoodEntryRow(entry: entry)
+                        }
+                        .buttonStyle(.plain)
+                        .contextMenu {
                             Button {
+                                store.relogFood(entry, on: .now)
+                            } label: {
+                                Label("Log again today", systemImage: "arrow.clockwise")
+                            }
+                            Button(role: .destructive) {
                                 store.deleteFood(entry)
                             } label: {
-                                Image(systemName: "minus.circle")
-                                    .foregroundStyle(Theme.inkSubtle)
+                                Label("Delete", systemImage: "trash")
                             }
-                            .buttonStyle(.plain)
                         }
                     }
                 }
+            }
+        }
+    }
+
+    // MARK: Water
+
+    private var waterCard: some View {
+        let water = store.water(on: day)
+        let glassCount = min(12, max(4, goals.waterMl / 250))
+        let filled = min(glassCount, water / 250)
+
+        return FlexCard(padding: 14) {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack {
+                    Image(systemName: "drop.fill")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(Theme.accent)
+                    Text("WATER")
+                        .font(.flexMono(11))
+                        .tracking(1.5)
+                        .foregroundStyle(Theme.ink)
+                    Spacer()
+                    Text("\(water) / \(goals.waterMl) ML")
+                        .font(.flexMono(10))
+                        .tracking(1)
+                        .foregroundStyle(water >= goals.waterMl ? Theme.accent : Theme.inkSubtle)
+                }
+
+                HStack(spacing: 6) {
+                    ForEach(0..<glassCount, id: \.self) { index in
+                        Image(systemName: index < filled ? "drop.fill" : "drop")
+                            .font(.system(size: 17))
+                            .foregroundStyle(index < filled ? Theme.accent : Theme.inkSubtle.opacity(0.35))
+                            .frame(maxWidth: .infinity)
+                    }
+                }
+                .animation(.spring(duration: 0.3), value: filled)
+
+                HStack(spacing: 8) {
+                    waterButton("+250 ML") { store.addWater(250, on: day) }
+                    waterButton("+500 ML") { store.addWater(500, on: day) }
+                    Spacer()
+                    Button {
+                        store.addWater(-250, on: day)
+                    } label: {
+                        Image(systemName: "minus")
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundStyle(Theme.inkSubtle)
+                            .frame(width: 34, height: 34)
+                            .background(Theme.background)
+                            .clipShape(Circle())
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(water == 0)
+                    .opacity(water == 0 ? 0.4 : 1)
+                }
+            }
+        }
+    }
+
+    private func waterButton(_ label: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(label)
+                .font(.flexMono(10))
+                .tracking(1)
+                .foregroundStyle(Theme.accent)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+                .background(Theme.accentSoft)
+                .clipShape(Capsule())
+        }
+        .buttonStyle(.plain)
+    }
+
+    // MARK: Week
+
+    private var weekDays: [DailyPoint] {
+        let today = calendar.startOfDay(for: .now)
+        return (0..<7).reversed().compactMap { offset in
+            guard let date = calendar.date(byAdding: .day, value: -offset, to: today) else { return nil }
+            return DailyPoint(date: date, value: Double(store.calories(on: date)))
+        }
+    }
+
+    private var weekCard: some View {
+        let days = weekDays
+        let logged = days.filter { $0.value > 0 }
+        let average = logged.isEmpty ? 0 : Int(logged.reduce(0) { $0 + $1.value } / Double(logged.count))
+        let within = logged.filter { $0.value <= Double(goals.calories) }.count
+
+        return FlexCard(padding: 16) {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(alignment: .top) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("LAST 7 DAYS")
+                            .font(.flexMono(11))
+                            .tracking(1.5)
+                            .foregroundStyle(Theme.ink)
+                        Text(logged.isEmpty
+                             ? "NOTHING LOGGED THIS WEEK"
+                             : "\(within) OF \(logged.count) LOGGED DAYS WITHIN BUDGET")
+                            .font(.flexMono(9))
+                            .tracking(1)
+                            .foregroundStyle(Theme.inkSubtle)
+                    }
+                    Spacer()
+                    VStack(alignment: .trailing, spacing: 0) {
+                        Text("\(average)")
+                            .font(.flexStat(22))
+                            .foregroundStyle(Theme.ink)
+                        Text("AVG KCAL")
+                            .font(.flexMono(8))
+                            .tracking(1)
+                            .foregroundStyle(Theme.inkSubtle)
+                    }
+                }
+
+                Chart {
+                    ForEach(days) { point in
+                        BarMark(
+                            x: .value("Day", point.date, unit: .day),
+                            y: .value("kcal", point.value)
+                        )
+                        .foregroundStyle(point.value > Double(goals.calories) ? Theme.amber : Theme.accent)
+                        .opacity(calendar.isDate(point.date, inSameDayAs: day) ? 1 : 0.55)
+                        .cornerRadius(5)
+                    }
+                    RuleMark(y: .value("Budget", goals.calories))
+                        .foregroundStyle(Theme.inkSubtle)
+                        .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 4]))
+                }
+                .chartXAxis {
+                    AxisMarks(values: .stride(by: .day)) { _ in
+                        AxisValueLabel(format: .dateTime.weekday(.narrow), centered: true)
+                    }
+                }
+                .chartYAxis(.hidden)
+                .frame(height: 120)
             }
         }
     }
@@ -223,6 +511,109 @@ struct FuelSection: View {
     }
 }
 
+// MARK: - Macro pieces
+
+enum MacroKind {
+    case protein, carbs, fat
+
+    var label: String {
+        switch self {
+        case .protein: "Protein"
+        case .carbs: "Carbs"
+        case .fat: "Fat"
+        }
+    }
+
+    var color: Color {
+        switch self {
+        case .protein: Theme.accent
+        case .carbs: Theme.amber
+        case .fat: Theme.ink.opacity(0.75)
+        }
+    }
+}
+
+/// One macro against its goal: label, grams, and a capsule that fills.
+struct MacroBar: View {
+    let kind: MacroKind
+    let value: Double
+    let goal: Int
+
+    private var progress: Double {
+        goal > 0 ? min(1, value / Double(goal)) : 0
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text(kind.label.uppercased())
+                    .font(.flexMono(10))
+                    .tracking(1.5)
+                    .foregroundStyle(Theme.ink)
+                Spacer()
+                Text("\(Int(value.rounded())) / \(goal) G")
+                    .font(.flexMono(10))
+                    .tracking(1)
+                    .monospacedDigit()
+                    .foregroundStyle(Theme.inkSubtle)
+            }
+            GeometryReader { proxy in
+                ZStack(alignment: .leading) {
+                    Capsule()
+                        .fill(Theme.background)
+                    Capsule()
+                        .fill(kind.color)
+                        .frame(width: max(progress > 0 ? 8 : 0, proxy.size.width * progress))
+                }
+            }
+            .frame(height: 8)
+            .animation(.spring(duration: 0.5), value: progress)
+        }
+    }
+}
+
+/// A logged food in a meal card.
+struct FoodEntryRow: View {
+    @Environment(AppStore.self) private var store
+    let entry: FoodEntry
+
+    var body: some View {
+        HStack(spacing: 10) {
+            if let fileName = entry.photoFileName {
+                AsyncPhotoView(url: store.imageURL(fileName: fileName), maxPixel: 100)
+                    .frame(width: 38, height: 38)
+                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            }
+            VStack(alignment: .leading, spacing: 2) {
+                Text(entry.name)
+                    .font(.flexBody())
+                    .foregroundStyle(Theme.ink)
+                    .lineLimit(1)
+                if let macros = entry.macros {
+                    Text(macros.shortLabel)
+                        .font(.flexMono(9))
+                        .tracking(0.5)
+                        .foregroundStyle(Theme.inkSubtle)
+                } else if let items = entry.items {
+                    Text("\(items.count) ITEMS")
+                        .font(.flexMono(9))
+                        .tracking(0.5)
+                        .foregroundStyle(Theme.inkSubtle)
+                }
+            }
+            Spacer()
+            Text("\(entry.calories)")
+                .font(.flexBodyBold())
+                .monospacedDigit()
+                .foregroundStyle(Theme.ink)
+            Image(systemName: "chevron.right")
+                .font(.system(size: 10, weight: .bold))
+                .foregroundStyle(Theme.inkSubtle.opacity(0.6))
+        }
+        .contentShape(Rectangle())
+    }
+}
+
 // MARK: - Add food sheet
 
 struct AddFoodSheet: View {
@@ -247,8 +638,45 @@ struct AddFoodSheet: View {
     @State private var showContextEditor = false
     @State private var dictation = VoiceDictation()
 
-    init(meal: MealType) {
+    /// Hand-entered macros. Optional — calories alone are still a valid log.
+    @State private var protein: Double?
+    @State private var carbs: Double?
+    @State private var fat: Double?
+    @State private var fiber: Double?
+    @State private var showMacroFields = false
+    /// Full macros (incl. sugar/sodium) from a quick-add or recent pick, so
+    /// the fields the form doesn't show still get saved.
+    @State private var presetMacros: Macros?
+    @State private var presetName: String?
+
+    /// The day being logged — today, or a past day chosen in the Diet tab.
+    private let day: Date
+
+    init(meal: MealType, day: Date = .now) {
         _meal = State(initialValue: meal)
+        self.day = day
+    }
+
+    private var manualMacros: Macros? {
+        guard protein != nil || carbs != nil || fat != nil || fiber != nil else { return nil }
+        var macros = presetMacros ?? Macros()
+        macros.protein = protein ?? 0
+        macros.carbs = carbs ?? 0
+        macros.fat = fat ?? 0
+        macros.fiber = fiber ?? 0
+        return macros
+    }
+
+    private var plateMacros: Macros? {
+        let known = items.compactMap(\.macros)
+        return known.isEmpty ? nil : known.reduce(Macros.zero, +)
+    }
+
+    private var dayLabel: String? {
+        let calendar = Calendar.current
+        if calendar.isDateInToday(day) { return nil }
+        if calendar.isDateInYesterday(day) { return "YESTERDAY" }
+        return day.formatted(.dateTime.weekday(.abbreviated).day().month()).uppercased()
     }
 
     private var cameraAvailable: Bool {
@@ -281,10 +709,19 @@ struct AddFoodSheet: View {
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
-                    Text(isReviewing ? "CHECK THE ESTIMATE" : "LOG FOOD")
-                        .font(.flexMono(12))
-                        .tracking(2)
-                        .foregroundStyle(Theme.ink)
+                    HStack {
+                        Text(isReviewing ? "CHECK THE ESTIMATE" : "LOG FOOD")
+                            .font(.flexMono(12))
+                            .tracking(2)
+                            .foregroundStyle(Theme.ink)
+                        Spacer()
+                        if let dayLabel {
+                            Text("FOR \(dayLabel)")
+                                .font(.flexMono(10))
+                                .tracking(1.5)
+                                .foregroundStyle(Theme.amber)
+                        }
+                    }
 
                     mealPicker
                     photoBlock
@@ -295,6 +732,8 @@ struct AddFoodSheet: View {
                         correctionRow
                     } else {
                         manualEntry
+                        macroFields
+                        recentRow
                         quickAddGrid
                     }
                 }
@@ -326,6 +765,14 @@ struct AddFoodSheet: View {
         }
         .sheet(isPresented: $showContextEditor) {
             CuisineContextSheet()
+        }
+        .onChange(of: name) { _, newValue in
+            // Typed something else after a preset: its hidden sugar/sodium
+            // no longer describe this food.
+            if let presetName, newValue != presetName {
+                presetMacros = nil
+                self.presetName = nil
+            }
         }
     }
 
@@ -474,6 +921,18 @@ struct AddFoodSheet: View {
                 itemRow($item)
             }
 
+            if let plateMacros {
+                HStack(spacing: 0) {
+                    plateStat("PROTEIN", "\(Int(plateMacros.protein.rounded()))g")
+                    plateStat("CARBS", "\(Int(plateMacros.carbs.rounded()))g")
+                    plateStat("FAT", "\(Int(plateMacros.fat.rounded()))g")
+                    plateStat("FIBRE", "\(Int(plateMacros.fiber.rounded()))g")
+                }
+                .padding(.vertical, 12)
+                .background(Theme.accentSoft)
+                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            }
+
             if let estimateNote {
                 Text(estimateNote)
                     .font(.flexCaption())
@@ -499,6 +958,12 @@ struct AddFoodSheet: View {
                         .font(.flexMono(9))
                         .tracking(1)
                         .foregroundStyle(value.isAddOn ? Theme.amber : Theme.inkSubtle)
+                    if let macros = value.macros {
+                        Text(macros.shortLabel)
+                            .font(.flexMono(9))
+                            .tracking(0.5)
+                            .foregroundStyle(Theme.inkSubtle)
+                    }
                 }
                 Spacer()
                 Text("\(value.calories)")
@@ -534,6 +999,20 @@ struct AddFoodSheet: View {
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 
+    private func plateStat(_ label: String, _ value: String) -> some View {
+        VStack(spacing: 2) {
+            Text(value)
+                .font(.flexBodyBold())
+                .monospacedDigit()
+                .foregroundStyle(Theme.ink)
+            Text(label)
+                .font(.flexMono(8))
+                .tracking(1)
+                .foregroundStyle(Theme.accent)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
     private func stepButton(_ icon: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: icon)
@@ -559,7 +1038,8 @@ struct AddFoodSheet: View {
                                 name: ingredient.name,
                                 baseCalories: ingredient.calories,
                                 portion: ingredient.portion,
-                                isAddOn: true
+                                isAddOn: true,
+                                baseMacros: ingredient.macros
                             ))
                         } label: {
                             HStack(spacing: 5) {
@@ -656,8 +1136,7 @@ struct AddFoodSheet: View {
             LazyVGrid(columns: quickFoodColumns, spacing: 8) {
                 ForEach(SampleData.quickFoods) { food in
                     Button {
-                        name = food.name
-                        calories = food.calories
+                        applyPreset(name: food.name, calories: food.calories, macros: food.macros)
                     } label: {
                         HStack {
                             Text(food.name)
@@ -665,7 +1144,7 @@ struct AddFoodSheet: View {
                                 .foregroundStyle(Theme.ink)
                                 .lineLimit(1)
                             Spacer()
-                            Text("\(food.calories)")
+                            Text("\(food.calories) · P\(Int(food.macros.protein.rounded()))")
                                 .font(.flexMono(10))
                                 .foregroundStyle(Theme.inkSubtle)
                         }
@@ -678,6 +1157,102 @@ struct AddFoodSheet: View {
                 }
             }
         }
+    }
+
+    // MARK: Macros (manual)
+
+    private var macroFields: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Button {
+                withAnimation(.spring(duration: 0.25)) { showMacroFields.toggle() }
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: showMacroFields ? "chevron.down" : "chevron.right")
+                        .font(.system(size: 9, weight: .bold))
+                    Text(manualMacros == nil ? "ADD MACROS (OPTIONAL)" : "MACROS · \(manualMacros!.shortLabel)")
+                        .font(.flexMono(10))
+                        .tracking(1)
+                }
+                .foregroundStyle(Theme.accent)
+            }
+            .buttonStyle(.plain)
+
+            if showMacroFields {
+                HStack(spacing: 8) {
+                    gramField("Protein", value: $protein)
+                    gramField("Carbs", value: $carbs)
+                    gramField("Fat", value: $fat)
+                    gramField("Fibre", value: $fiber)
+                }
+            }
+        }
+    }
+
+    private func gramField(_ label: String, value: Binding<Double?>) -> some View {
+        VStack(spacing: 4) {
+            TextField("0", value: value, format: .number)
+                .keyboardType(.decimalPad)
+                .font(.flexBodyBold())
+                .multilineTextAlignment(.center)
+                .padding(.vertical, 11)
+                .background(Theme.card)
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            Text("\(label.uppercased()) G")
+                .font(.flexMono(8))
+                .tracking(1)
+                .foregroundStyle(Theme.inkSubtle)
+        }
+    }
+
+    // MARK: Recent foods
+
+    /// What you actually eat, one tap away. Beats any generic list.
+    @ViewBuilder
+    private var recentRow: some View {
+        let recent = store.recentFoods
+        if !recent.isEmpty {
+            VStack(alignment: .leading, spacing: 8) {
+                SectionHeader(title: "Recent", subtitle: "Tap to fill, then add.")
+                ScrollView(.horizontal) {
+                    HStack(spacing: 8) {
+                        ForEach(recent) { entry in
+                            Button {
+                                applyPreset(name: entry.name, calories: entry.calories, macros: entry.macros)
+                            } label: {
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text(entry.name)
+                                        .font(.flexCaption())
+                                        .foregroundStyle(Theme.ink)
+                                        .lineLimit(1)
+                                    Text("\(entry.calories) KCAL")
+                                        .font(.flexMono(9))
+                                        .foregroundStyle(Theme.inkSubtle)
+                                }
+                                .frame(maxWidth: 150, alignment: .leading)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 9)
+                                .background(name == entry.name ? Theme.accentSoft : Theme.card)
+                                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
+                .scrollIndicators(.hidden)
+            }
+        }
+    }
+
+    private func applyPreset(name: String, calories: Int, macros: Macros?) {
+        self.name = name
+        self.calories = calories
+        presetName = name
+        presetMacros = macros
+        protein = macros.map { ($0.protein * 10).rounded() / 10 }
+        carbs = macros.map { ($0.carbs * 10).rounded() / 10 }
+        fat = macros.map { ($0.fat * 10).rounded() / 10 }
+        fiber = macros.map { ($0.fiber * 10).rounded() / 10 }
+        if macros != nil { showMacroFields = true }
     }
 
     // MARK: Save
@@ -699,8 +1274,10 @@ struct AddFoodSheet: View {
                     name: name,
                     calories: isReviewing ? totalCalories : (calories ?? 0),
                     meal: meal,
+                    date: store.logDate(for: day, meal: meal),
                     photoData: photoData,
-                    items: isReviewing ? items : nil
+                    items: isReviewing ? items : nil,
+                    macros: isReviewing ? nil : manualMacros
                 )
                 dismiss()
             }
@@ -982,51 +1559,290 @@ struct LogWeightSheet: View {
     }
 }
 
-// MARK: - Budget sheet
+// MARK: - Nutrition goals
 
-struct BudgetSheet: View {
+/// Calories plus the targets that make them mean something. Picking a
+/// direction sets a sensible macro split; every number stays adjustable.
+struct NutritionGoalsSheet: View {
     @Environment(AppStore.self) private var store
     @Environment(\.dismiss) private var dismiss
-    @State private var budget = 2200
+    @State private var goals = NutritionGoals()
+    @State private var direction: DietDirection?
+
+    private var macroCalories: Int {
+        goals.protein * 4 + goals.carbs * 4 + goals.fat * 9
+    }
+
+    private var macrosMatchCalories: Bool {
+        guard goals.calories > 0 else { return true }
+        return abs(Double(macroCalories - goals.calories)) / Double(goals.calories) <= 0.1
+    }
 
     var body: some View {
-        VStack(spacing: 20) {
-            Text("DAILY BUDGET")
-                .font(.flexMono(12))
-                .tracking(2)
-                .foregroundStyle(Theme.ink)
-                .padding(.top, 24)
+        VStack(spacing: 0) {
+            Capsule()
+                .fill(Theme.inkSubtle.opacity(0.3))
+                .frame(width: 36, height: 5)
+                .padding(.top, 10)
+                .padding(.bottom, 14)
 
-            Text("\(budget)")
-                .font(.flexDisplay(56))
-                .monospacedDigit()
-                .foregroundStyle(Theme.ink)
-            Text("KCAL / DAY")
-                .font(.flexMono(11))
-                .tracking(2)
-                .foregroundStyle(Theme.inkSubtle)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    Text("DAILY GOALS")
+                        .font(.flexMono(12))
+                        .tracking(2)
+                        .foregroundStyle(Theme.ink)
+                    Text("A budget is a direction, not a verdict. Pick numbers you can keep on a normal day.")
+                        .font(.flexCaption())
+                        .foregroundStyle(Theme.inkSubtle)
 
-            Stepper("Adjust", value: $budget, in: 1200...4500, step: 50)
-                .labelsHidden()
+                    VStack(alignment: .leading, spacing: 8) {
+                        SectionHeader(title: "Direction", subtitle: "Sets a macro split from your calories.")
+                        HStack(spacing: 8) {
+                            ForEach(DietDirection.allCases) { item in
+                                SelectableChip(label: item.rawValue, isSelected: direction == item) {
+                                    direction = item
+                                    goals = item.goals(calories: goals.calories, keeping: goals)
+                                }
+                            }
+                        }
+                    }
 
-            Text("A budget is a direction, not a verdict. Pick one you can keep on a normal day.")
-                .font(.flexCaption())
-                .foregroundStyle(Theme.inkSubtle)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, 30)
+                    goalRow("Calories", unit: "kcal", value: $goals.calories, range: 1200...4500, step: 50) {
+                        if let direction {
+                            goals = direction.goals(calories: goals.calories, keeping: goals)
+                        }
+                    }
+                    goalRow("Protein", unit: "g", value: $goals.protein, range: 30...300, step: 5) { direction = nil }
 
-            Button("Save") {
-                store.calorieBudget = budget
-                store.save()
+                    if let weight = store.latestWeight?.kilograms {
+                        let target = Int((weight * 1.6).rounded())
+                        Button {
+                            goals.protein = target
+                            direction = nil
+                        } label: {
+                            Text("MATCH 1.6 G PER KG BODY WEIGHT → \(target) G")
+                                .font(.flexMono(9))
+                                .tracking(1)
+                                .foregroundStyle(Theme.accent)
+                        }
+                        .buttonStyle(.plain)
+                    }
+
+                    goalRow("Carbs", unit: "g", value: $goals.carbs, range: 30...600, step: 5) { direction = nil }
+                    goalRow("Fat", unit: "g", value: $goals.fat, range: 20...250, step: 5) { direction = nil }
+
+                    Text("Macros add up to \(macroCalories) kcal\(macrosMatchCalories ? " — in line with your calorie goal." : ", which is off from your \(goals.calories) kcal goal. Adjust one or the other.")")
+                        .font(.flexCaption())
+                        .foregroundStyle(macrosMatchCalories ? Theme.inkSubtle : Theme.amber)
+
+                    goalRow("Fibre", unit: "g", value: $goals.fiber, range: 10...70, step: 1)
+                    goalRow("Water", unit: "ml", value: $goals.waterMl, range: 1000...5000, step: 250)
+                }
+                .padding(.horizontal, 20)
+                .padding(.bottom, 20)
+            }
+            .scrollIndicators(.hidden)
+
+            Button("Save goals") {
+                store.updateNutritionGoals(goals)
                 dismiss()
             }
             .buttonStyle(PrimaryButtonStyle())
             .padding(.horizontal, 20)
+            .padding(.bottom, 12)
         }
-        .padding(.bottom, 16)
-        .frame(maxWidth: .infinity)
         .background(Theme.background)
-        .presentationDetents([.medium])
-        .onAppear { budget = store.calorieBudget }
+        .presentationDetents([.large])
+        .onAppear { goals = store.nutritionGoals }
+    }
+
+    private func goalRow(
+        _ title: String,
+        unit: String,
+        value: Binding<Int>,
+        range: ClosedRange<Int>,
+        step: Int,
+        onEdit: (() -> Void)? = nil
+    ) -> some View {
+        let binding = Binding<Int>(
+            get: { value.wrappedValue },
+            set: { newValue in
+                value.wrappedValue = newValue
+                onEdit?()
+            }
+        )
+        return HStack {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title.uppercased())
+                    .font(.flexMono(10))
+                    .tracking(1.5)
+                    .foregroundStyle(Theme.inkSubtle)
+                HStack(alignment: .firstTextBaseline, spacing: 4) {
+                    Text("\(value.wrappedValue)")
+                        .font(.flexStat(24))
+                        .monospacedDigit()
+                        .foregroundStyle(Theme.ink)
+                    Text(unit.uppercased())
+                        .font(.flexMono(9))
+                        .foregroundStyle(Theme.inkSubtle)
+                }
+            }
+            Spacer()
+            Stepper(title, value: binding, in: range, step: step)
+                .labelsHidden()
+        }
+        .padding(14)
+        .background(Theme.card)
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+    }
+}
+
+// MARK: - Food entry detail
+
+/// Everything known about one logged food: the photo, the per-item
+/// breakdown, every nutrient — and one tap to eat it again.
+struct FoodEntryDetailSheet: View {
+    @Environment(AppStore.self) private var store
+    @Environment(\.dismiss) private var dismiss
+    let entry: FoodEntry
+
+    private let columns = [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)]
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Capsule()
+                .fill(Theme.inkSubtle.opacity(0.3))
+                .frame(width: 36, height: 5)
+                .padding(.top, 10)
+                .padding(.bottom, 14)
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: 18) {
+                    if let fileName = entry.photoFileName {
+                        AsyncPhotoView(url: store.imageURL(fileName: fileName), maxPixel: 900)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 200)
+                            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                    }
+
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("\(entry.meal.label.uppercased()) · \(entry.date.formatted(.dateTime.weekday(.abbreviated).day().month().hour().minute()).uppercased())")
+                            .font(.flexMono(10))
+                            .tracking(1.5)
+                            .foregroundStyle(Theme.accent)
+                        Text(entry.name.uppercased())
+                            .font(.flexDisplay(28))
+                            .foregroundStyle(Theme.ink)
+                        HStack(alignment: .firstTextBaseline, spacing: 6) {
+                            Text("\(entry.calories)")
+                                .font(.flexStat(40))
+                                .foregroundStyle(Theme.ink)
+                            Text("KCAL")
+                                .font(.flexMono(11))
+                                .tracking(1.5)
+                                .foregroundStyle(Theme.inkSubtle)
+                        }
+                    }
+
+                    if let macros = entry.macros {
+                        LazyVGrid(columns: columns, spacing: 8) {
+                            nutrient("Protein", grams: macros.protein)
+                            nutrient("Carbs", grams: macros.carbs)
+                            nutrient("Fat", grams: macros.fat)
+                            nutrient("Fibre", grams: macros.fiber)
+                            nutrient("Sugar", grams: macros.sugar)
+                            nutrientTile("Sodium", value: "\(Int(macros.sodiumMg.rounded()))", unit: "MG")
+                        }
+                    } else {
+                        Text("Calories only — this entry was logged without macros.")
+                            .font(.flexCaption())
+                            .foregroundStyle(Theme.inkSubtle)
+                    }
+
+                    if let items = entry.items, !items.isEmpty {
+                        VStack(alignment: .leading, spacing: 8) {
+                            SectionHeader(title: "Breakdown", subtitle: "What was on the plate, as logged.")
+                            ForEach(items) { item in
+                                HStack(alignment: .top) {
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(item.name)
+                                            .font(.flexBodyBold())
+                                            .foregroundStyle(Theme.ink)
+                                        Text("\(item.portion.uppercased()) · \(item.multiplierLabel)")
+                                            .font(.flexMono(9))
+                                            .tracking(1)
+                                            .foregroundStyle(item.isAddOn ? Theme.amber : Theme.inkSubtle)
+                                        if let macros = item.macros {
+                                            Text(macros.shortLabel)
+                                                .font(.flexMono(9))
+                                                .foregroundStyle(Theme.inkSubtle)
+                                        }
+                                    }
+                                    Spacer()
+                                    Text("\(item.calories)")
+                                        .font(.flexBodyBold())
+                                        .monospacedDigit()
+                                        .foregroundStyle(Theme.ink)
+                                }
+                                .padding(12)
+                                .background(Theme.card)
+                                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                            }
+                        }
+                    }
+                }
+                .padding(.horizontal, 20)
+                .padding(.bottom, 20)
+            }
+            .scrollIndicators(.hidden)
+
+            VStack(spacing: 10) {
+                Button {
+                    store.relogFood(entry, on: .now)
+                    dismiss()
+                } label: {
+                    Label("Log again today", systemImage: "arrow.clockwise")
+                }
+                .buttonStyle(PrimaryButtonStyle())
+
+                Button(role: .destructive) {
+                    store.deleteFood(entry)
+                    dismiss()
+                } label: {
+                    Label("Delete entry", systemImage: "trash")
+                }
+                .buttonStyle(SecondaryButtonStyle(tint: Theme.danger))
+            }
+            .padding(.horizontal, 20)
+            .padding(.bottom, 12)
+        }
+        .background(Theme.background)
+        .presentationDetents([.large])
+    }
+
+    private func nutrient(_ label: String, grams: Double) -> some View {
+        nutrientTile(label, value: grams < 10 ? String(format: "%.1f", grams) : "\(Int(grams.rounded()))", unit: "G")
+    }
+
+    private func nutrientTile(_ label: String, value: String, unit: String) -> some View {
+        VStack(spacing: 4) {
+            HStack(alignment: .firstTextBaseline, spacing: 2) {
+                Text(value)
+                    .font(.flexStat(20))
+                    .foregroundStyle(Theme.ink)
+                Text(unit)
+                    .font(.flexMono(8))
+                    .foregroundStyle(Theme.inkSubtle)
+            }
+            Text(label.uppercased())
+                .font(.flexMono(8))
+                .tracking(1.5)
+                .foregroundStyle(Theme.inkSubtle)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 14)
+        .background(Theme.card)
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 }

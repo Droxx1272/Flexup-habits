@@ -55,26 +55,31 @@ enum SampleData {
         ExerciseTemplate(name: "Plank", muscle: "Core"),
     ]
 
-    /// One-tap foods for the Fuel logger.
+    /// One-tap foods for the Diet logger, with typical macros per portion.
     struct QuickFood: Identifiable, Hashable {
         var id: String { name }
         var name: String
         var calories: Int
+        var macros: Macros
     }
 
     static let quickFoods: [QuickFood] = [
-        QuickFood(name: "Oats bowl", calories: 220),
-        QuickFood(name: "2 eggs", calories: 156),
-        QuickFood(name: "Banana", calories: 105),
-        QuickFood(name: "Apple", calories: 95),
-        QuickFood(name: "Chicken breast", calories: 165),
-        QuickFood(name: "Paneer 100g", calories: 265),
-        QuickFood(name: "Rice bowl", calories: 240),
-        QuickFood(name: "Dal bowl", calories: 180),
-        QuickFood(name: "2 rotis", calories: 200),
-        QuickFood(name: "Protein shake", calories: 180),
-        QuickFood(name: "Greek yogurt", calories: 120),
-        QuickFood(name: "Handful of nuts", calories: 170),
+        QuickFood(name: "Oats bowl", calories: 220, macros: Macros(protein: 8, carbs: 38, fat: 4, fiber: 5, sugar: 1, sodiumMg: 5)),
+        QuickFood(name: "2 eggs", calories: 156, macros: Macros(protein: 12.6, carbs: 1.1, fat: 10.6, sugar: 1.1, sodiumMg: 140)),
+        QuickFood(name: "Banana", calories: 105, macros: Macros(protein: 1.3, carbs: 27, fat: 0.4, fiber: 3.1, sugar: 14, sodiumMg: 1)),
+        QuickFood(name: "Apple", calories: 95, macros: Macros(protein: 0.5, carbs: 25, fat: 0.3, fiber: 4.4, sugar: 19, sodiumMg: 2)),
+        QuickFood(name: "Chicken breast", calories: 165, macros: Macros(protein: 31, fat: 3.6, sodiumMg: 74)),
+        QuickFood(name: "Paneer 100g", calories: 265, macros: Macros(protein: 18, carbs: 1.2, fat: 21, sugar: 1.2, sodiumMg: 18)),
+        QuickFood(name: "Rice bowl", calories: 240, macros: Macros(protein: 4.4, carbs: 53, fat: 0.4, fiber: 0.6, sodiumMg: 2)),
+        QuickFood(name: "Dal bowl", calories: 180, macros: Macros(protein: 10, carbs: 28, fat: 3, fiber: 8, sugar: 2, sodiumMg: 350)),
+        QuickFood(name: "2 rotis", calories: 200, macros: Macros(protein: 6, carbs: 36, fat: 4, fiber: 6, sugar: 0.5, sodiumMg: 250)),
+        QuickFood(name: "Protein shake", calories: 180, macros: Macros(protein: 25, carbs: 8, fat: 3, fiber: 1, sugar: 3, sodiumMg: 150)),
+        QuickFood(name: "Greek yogurt", calories: 120, macros: Macros(protein: 17, carbs: 6, fat: 3, sugar: 6, sodiumMg: 60)),
+        QuickFood(name: "Handful of nuts", calories: 170, macros: Macros(protein: 6, carbs: 6, fat: 15, fiber: 3, sugar: 1, sodiumMg: 1)),
+        QuickFood(name: "Glass of milk", calories: 150, macros: Macros(protein: 8, carbs: 12, fat: 8, sugar: 12, sodiumMg: 105)),
+        QuickFood(name: "Salmon fillet", calories: 280, macros: Macros(protein: 30, fat: 17, sodiumMg: 90)),
+        QuickFood(name: "Tofu 150g", calories: 215, macros: Macros(protein: 23, carbs: 4, fat: 13, fiber: 3, sodiumMg: 20)),
+        QuickFood(name: "Avocado toast", calories: 290, macros: Macros(protein: 7, carbs: 30, fat: 17, fiber: 8, sugar: 3, sodiumMg: 330)),
     ]
 
     /// Calories a photo can't see. Cooking fat is the single biggest source
@@ -85,21 +90,22 @@ enum SampleData {
         var name: String
         var calories: Int
         var portion: String
+        var macros: Macros
     }
 
     static let hiddenIngredients: [HiddenIngredient] = [
-        HiddenIngredient(name: "Cooking oil", calories: 120, portion: "1 tbsp"),
-        HiddenIngredient(name: "Ghee", calories: 112, portion: "1 tbsp"),
-        HiddenIngredient(name: "Butter", calories: 102, portion: "1 tbsp"),
-        HiddenIngredient(name: "Olive oil", calories: 119, portion: "1 tbsp"),
-        HiddenIngredient(name: "Cream", calories: 52, portion: "1 tbsp"),
-        HiddenIngredient(name: "Coconut milk", calories: 111, portion: "1/4 cup"),
-        HiddenIngredient(name: "Sugar", calories: 16, portion: "1 tsp"),
-        HiddenIngredient(name: "Mayonnaise", calories: 94, portion: "1 tbsp"),
-        HiddenIngredient(name: "Cheese", calories: 113, portion: "1 slice"),
-        HiddenIngredient(name: "Nuts / seeds", calories: 170, portion: "small handful"),
-        HiddenIngredient(name: "Deep fried", calories: 130, portion: "absorbed oil"),
-        HiddenIngredient(name: "Dressing / sauce", calories: 75, portion: "1 tbsp"),
+        HiddenIngredient(name: "Cooking oil", calories: 120, portion: "1 tbsp", macros: Macros(fat: 14)),
+        HiddenIngredient(name: "Ghee", calories: 112, portion: "1 tbsp", macros: Macros(fat: 12.7)),
+        HiddenIngredient(name: "Butter", calories: 102, portion: "1 tbsp", macros: Macros(protein: 0.1, fat: 11.5, sodiumMg: 90)),
+        HiddenIngredient(name: "Olive oil", calories: 119, portion: "1 tbsp", macros: Macros(fat: 13.5)),
+        HiddenIngredient(name: "Cream", calories: 52, portion: "1 tbsp", macros: Macros(protein: 0.4, carbs: 0.4, fat: 5.5, sugar: 0.4, sodiumMg: 6)),
+        HiddenIngredient(name: "Coconut milk", calories: 111, portion: "1/4 cup", macros: Macros(protein: 1.1, carbs: 1.6, fat: 12, sodiumMg: 7)),
+        HiddenIngredient(name: "Sugar", calories: 16, portion: "1 tsp", macros: Macros(carbs: 4.2, sugar: 4.2)),
+        HiddenIngredient(name: "Mayonnaise", calories: 94, portion: "1 tbsp", macros: Macros(carbs: 0.1, fat: 10.3, sodiumMg: 88)),
+        HiddenIngredient(name: "Cheese", calories: 113, portion: "1 slice", macros: Macros(protein: 7, carbs: 0.4, fat: 9.3, sodiumMg: 180)),
+        HiddenIngredient(name: "Nuts / seeds", calories: 170, portion: "small handful", macros: Macros(protein: 6, carbs: 6, fat: 15, fiber: 3, sugar: 1)),
+        HiddenIngredient(name: "Deep fried", calories: 130, portion: "absorbed oil", macros: Macros(fat: 14.5)),
+        HiddenIngredient(name: "Dressing / sauce", calories: 75, portion: "1 tbsp", macros: Macros(carbs: 2, fat: 7, sugar: 1.5, sodiumMg: 150)),
     ]
 
     /// Starting points for the cooking context. Western food databases

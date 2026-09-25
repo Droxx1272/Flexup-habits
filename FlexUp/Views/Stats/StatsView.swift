@@ -216,6 +216,15 @@ struct StatsSection: View {
                     .foregroundStyle(Theme.danger)
                     .buttonStyle(.plain)
                 }
+                Button {
+                    store.replayIntro()
+                } label: {
+                    Text("REPLAY THE INTRODUCTION")
+                        .font(.flexMono(9))
+                        .tracking(1)
+                        .foregroundStyle(Theme.accent)
+                }
+                .buttonStyle(.plain)
             }
         }
         .confirmationDialog("Sign out of FlexUp?", isPresented: $confirmSignOut, titleVisibility: .visible) {

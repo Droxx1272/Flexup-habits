@@ -26,6 +26,36 @@ struct MealEstimate: Decodable {
         let name: String
         let calories: Int
         let portion: String
+        // Optional on our side so a reply without them still decodes; the
+        // schema asks for them on every item.
+        let proteinG: Double?
+        let carbsG: Double?
+        let fatG: Double?
+        let fiberG: Double?
+        let sugarG: Double?
+        let sodiumMg: Double?
+
+        enum CodingKeys: String, CodingKey {
+            case name, calories, portion
+            case proteinG = "protein_g"
+            case carbsG = "carbs_g"
+            case fatG = "fat_g"
+            case fiberG = "fiber_g"
+            case sugarG = "sugar_g"
+            case sodiumMg = "sodium_mg"
+        }
+
+        var macros: Macros? {
+            guard proteinG != nil || carbsG != nil || fatG != nil else { return nil }
+            return Macros(
+                protein: max(0, proteinG ?? 0),
+                carbs: max(0, carbsG ?? 0),
+                fat: max(0, fatG ?? 0),
+                fiber: max(0, fiberG ?? 0),
+                sugar: max(0, sugarG ?? 0),
+                sodiumMg: max(0, sodiumMg ?? 0)
+            )
+        }
     }
 
     enum CodingKeys: String, CodingKey {
@@ -37,7 +67,9 @@ struct MealEstimate: Decodable {
 
     /// Convert to the editable model the review UI drives.
     var foodItems: [FoodItem] {
-        items.map { FoodItem(name: $0.name, baseCalories: max(0, $0.calories), portion: $0.portion) }
+        items.map {
+            FoodItem(name: $0.name, baseCalories: max(0, $0.calories), portion: $0.portion, baseMacros: $0.macros)
+        }
     }
 }
 
@@ -83,8 +115,14 @@ enum CalorieEstimator {
                         "name": ["type": "string", "description": "Component name, e.g. 'Dal', 'Rice', 'Roti'"],
                         "calories": ["type": "integer", "description": "Calories for the portion described"],
                         "portion": ["type": "string", "description": "The portion you estimated, e.g. '1 cup', '2 pieces', '150 g'"],
+                        "protein_g": ["type": "number", "description": "Protein in grams for this portion"],
+                        "carbs_g": ["type": "number", "description": "Total carbohydrate in grams for this portion"],
+                        "fat_g": ["type": "number", "description": "Fat in grams for this portion, including cooking fat"],
+                        "fiber_g": ["type": "number", "description": "Dietary fibre in grams for this portion"],
+                        "sugar_g": ["type": "number", "description": "Sugars in grams for this portion"],
+                        "sodium_mg": ["type": "number", "description": "Sodium in milligrams for this portion"],
                     ],
-                    "required": ["name", "calories", "portion"],
+                    "required": ["name", "calories", "portion", "protein_g", "carbs_g", "fat_g", "fiber_g", "sugar_g", "sodium_mg"],
                     "additionalProperties": false,
                 ],
             ],
@@ -113,7 +151,7 @@ enum CalorieEstimator {
 
         let body: [String: Any] = [
             "model": model,
-            "max_tokens": 1500,
+            "max_tokens": 2500,
             "output_config": [
                 "format": [
                     "type": "json_schema",
@@ -182,6 +220,12 @@ enum CalorieEstimator {
             Estimate the calories in this meal photo for a tracking app. Break the \
             plate into its distinct components and give each one its own line with \
             the portion you think you see and the calories for that portion.
+            """,
+            """
+            For every component also give protein, carbohydrate, fat, fibre and \
+            sugar in grams and sodium in milligrams for the same portion. Keep \
+            them consistent with the calories (protein and carbs 4 kcal/g, fat \
+            9 kcal/g) and with the recipe you assumed.
             """,
             """
             Be realistic about cooking fat. Photos cannot show oil, ghee, butter, \

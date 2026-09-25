@@ -5,7 +5,10 @@ struct RootView: View {
 
     var body: some View {
         Group {
-            if !store.isSignedIn {
+            if !store.hasSeenIntro {
+                IntroView()
+                    .transition(.opacity)
+            } else if !store.isSignedIn {
                 AuthView()
             } else if !store.hasOnboarded {
                 OnboardingView()
@@ -20,10 +23,11 @@ struct RootView: View {
             }
         }
         .animation(.spring(duration: 0.35), value: store.celebration != nil)
+        .animation(.easeInOut(duration: 0.35), value: store.hasSeenIntro)
     }
 }
 
-/// One tab per pillar, plus Stats. Everything else (Discover, Squad,
+/// One tab per pillar, plus Today (commitments, progress, stats). Everything else (Discover, Squad,
 /// Calendar, coach) stays in the codebase for later — the nav stays simple.
 struct MainTabView: View {
     var body: some View {

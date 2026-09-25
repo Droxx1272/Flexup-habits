@@ -38,14 +38,14 @@ Four pillars plus the proof — one tab each, nothing buried:
 | **Wake** | Wake/Sleep toggle. **Wake**: Erly-style wake time with a real alarm (AlarmKit on iOS 26+ — rings through the mute switch like the Clock app; older systems fall back to a burst of Time Sensitive notifications 40s apart that stop the moment you check in), morning check-in (photo of the sky counts), weekly streak strip, and a 5-second alarm preview. **Sleep**: bedtime reminder, log-last-night flow (bedtime/wake time pickers + quality rating), duration/quality history, 7-day average and night streak. No snoozing, no backup alarms. |
 | **Run** | GPS tracking (Strava-style): live route map while recording, time/distance/pace/elevation, per-km splits, and a run detail view with the route drawn, headline stats, and split pace bars. |
 | **Gym** | Training log (Hevy-style): saved routines you can start from, live session with a rest timer, sets × kg × reps prefilled from your last set, last-session and all-time bests per exercise, volume stats, history. |
-| **Diet** | Calorie tracking (Lose It-style): daily budget ring, four meals, quick-add foods, body-weight logging with a 30-day trend, and photo estimation built for real plates — see below. |
-| **Today** | Where the loop closes, with a **Today / Stats** toggle. **Today**: progress ring, the day's commitments (tap to run a timer, take photo proof, complete, reschedule or skip), plan a one-off, and Quick Start. **Stats**: per-pillar streaks and totals, weekly consistency chart, habit management (add/edit/delete the habits that schedule your days), body-weight trend, progress photos with pose guides and then-vs-now comparison, achievements, account. |
+| **Diet** | Nutrition (Lose It-style, more data): step back through any day to review or back-fill it; calorie budget ring and logging streak; **macros** (protein / carbs / fat bars against goals, energy-split donut, fibre / sugar / sodium) with an honest note when some calories have no macro data; water tracker (+250 / +500 ml against a daily goal); last-7-days calorie chart against budget; tap any food for its full breakdown and "log again"; recent foods and 16 quick-adds with macros; nutrition goals (Lose / Maintain / Build split, protein from body weight, fibre, water); body-weight logging; and photo estimation built for real plates — see below. |
+| **Today** | Where the loop closes, with a **Today / Progress / Stats** toggle. **Today**: progress ring, the day's commitments (tap to run a timer, take photo proof, complete, reschedule or skip), plan a one-off, and Quick Start. **Progress**: every pillar over 7D / 30D / 90D / 1Y — follow-through rate, a square-per-morning wake grid, sleep hours vs 8h, km per day/week, gym volume with personal records, calories vs budget with average macros and water, body weight and photo count. Unlogged days are gaps, never zeros. **Stats**: per-pillar streaks and totals, weekly consistency chart, habit management, body-weight trend, progress photos with pose guides and then-vs-now comparison, achievements, account. |
 
 Everything logged can be removed — long-press any run, workout, night, weigh-in, routine, or habit to delete it.
 
 ## Photo calorie estimation
 
-Snap a plate and Claude Haiku 4.5 vision returns an **itemised** estimate (~$0.002/photo, structured JSON output). A single number is untrustworthy, so the flow is built around correcting it:
+Snap a plate and Claude Haiku 4.5 vision returns an **itemised** estimate — calories plus protein, carbs, fat, fibre, sugar and sodium per component (~$0.002/photo, structured JSON output). A single number is untrustworthy, so the flow is built around correcting it:
 
 - **Tap to adjust any portion.** Each component gets its own row with the portion the model believed it saw; − / + scale it in quarter steps and the total updates live.
 - **Add what the photo missed.** Cooking fat is invisible in a photo and is the biggest single source of error — one tap adds ghee, oil, butter, cream, coconut milk, deep-frying and more.
@@ -56,8 +56,9 @@ Bring-your-own API key in v1; a backend proxy replaces it before release.
 
 Discover, Squad (social feed + memories), Calendar, Activity detail, and the coach remain in the codebase but out of the nav — the navigation stays simple until the pillars are solid.
 
-## Login & onboarding
+## Introduction, login & onboarding
 
+- A five-page **introduction** runs once before sign-in (the loop, then Wake, Run + Gym, Diet, Progress), each with an animated ink illustration; Skip or swipe through. Replayable from Stats.
 - **Sign in with Apple** (primary; requires the Sign In with Apple capability + a paid Apple Developer account) with an on-device **email account** fallback. Accounts gate the app; sign-out lives in Stats. Data stays on device in v1 — a backend later adds verification and sync.
 - Onboarding is one question per screen (progress bar, back arrow, big type): name → identity → focus areas → starter habits → wake-up time, so day one starts tomorrow morning.
 

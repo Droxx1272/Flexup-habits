@@ -24,7 +24,11 @@ final class AppStore {
     var weightEntries: [WeightEntry] = []
     var foodEntries: [FoodEntry] = []
     var progressPhotos: [ProgressPhoto] = []
-    var calorieBudget: Int = 2200
+    var nutritionGoals = NutritionGoals()
+    /// Millilitres of water per day, keyed by `dayKey`.
+    var waterByDay: [String: Int] = [:]
+    /// The paged introduction runs once, before sign-in.
+    var hasSeenIntro = false
     /// How this person actually cooks, in their words. Fed to the photo
     /// estimator so regional dishes aren't scored against Western recipes.
     var cuisineContext: String = ""
@@ -41,6 +45,22 @@ final class AppStore {
 
     var hasOnboarded: Bool { profile != nil }
     var isSignedIn: Bool { account != nil }
+
+    /// Kept as its own name because half the app already reads it.
+    var calorieBudget: Int {
+        get { nutritionGoals.calories }
+        set { nutritionGoals.calories = newValue }
+    }
+
+    func completeIntro() {
+        hasSeenIntro = true
+        save()
+    }
+
+    /// Lets someone watch the introduction again from Stats.
+    func replayIntro() {
+        hasSeenIntro = false
+    }
 
     func signIn(_ account: Account) {
         self.account = account
@@ -243,6 +263,13 @@ final class AppStore {
     private func dayKey(_ date: Date = .now) -> String {
         let parts = calendar.dateComponents([.year, .month, .day], from: date)
         return "\(parts.year ?? 0)-\(parts.month ?? 0)-\(parts.day ?? 0)"
+    }
+
+    /// Inverse of `dayKey` — noon on that day, so time zones can't tip it.
+    private func date(fromDayKey key: String) -> Date? {
+        let parts = key.split(separator: "-").compactMap { Int($0) }
+        guard parts.count == 3 else { return nil }
+        return calendar.date(from: DateComponents(year: parts[0], month: parts[1], day: parts[2], hour: 12))
     }
 
     var todayMood: String? {
@@ -577,41 +604,140 @@ final class AppStore {
         name: String,
         calories: Int,
         meal: MealType,
+        date: Date = .now,
         photoData: Data? = nil,
-        items: [FoodItem]? = nil
+        items: [FoodItem]? = nil,
+        macros: Macros? = nil
     ) {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, calories > 0 else { return }
         let fileName = photoData.flatMap { saveImage($0) }
+        let storedItems = (items?.isEmpty ?? true) ? nil : items
+        // An itemised plate's macros are the sum of its items.
+        let itemMacros = storedItems?.compactMap(\.macros).reduce(Macros.zero, +)
+        let resolvedMacros = macros ?? itemMacros.flatMap { $0.isEmpty ? nil : $0 }
         foodEntries.insert(
             FoodEntry(
                 name: trimmed,
                 calories: calories,
                 meal: meal,
+                date: date,
                 photoFileName: fileName,
-                items: (items?.isEmpty ?? true) ? nil : items
+                items: storedItems,
+                macros: resolvedMacros
             ),
             at: 0
         )
+        foodEntries.sort { $0.date > $1.date }
+        save()
+    }
+
+    /// Log the same food again — the fastest entry there is. The photo stays
+    /// with the original so deleting one never breaks the other.
+    func relogFood(_ entry: FoodEntry, meal: MealType? = nil, on day: Date = .now) {
+        let targetMeal = meal ?? entry.meal
+        foodEntries.insert(
+            FoodEntry(
+                name: entry.name,
+                calories: entry.calories,
+                meal: targetMeal,
+                date: logDate(for: day, meal: targetMeal),
+                items: entry.items,
+                macros: entry.macros
+            ),
+            at: 0
+        )
+        foodEntries.sort { $0.date > $1.date }
         save()
     }
 
     func deleteFood(_ entry: FoodEntry) {
-        if let fileName = entry.photoFileName {
+        if let fileName = entry.photoFileName,
+           !foodEntries.contains(where: { $0.id != entry.id && $0.photoFileName == fileName }) {
             try? FileManager.default.removeItem(at: imageURL(fileName: fileName))
         }
         foodEntries.removeAll { $0.id == entry.id }
         save()
     }
 
-    func todayFood(for meal: MealType) -> [FoodEntry] {
-        foodEntries.filter { $0.meal == meal && calendar.isDateInToday($0.date) }
+    /// When a food logged for `day` should be timestamped: now for today,
+    /// otherwise a plausible hour for the meal so back-filled days sort right.
+    func logDate(for day: Date, meal: MealType) -> Date {
+        if calendar.isDateInToday(day) { return .now }
+        let hour: Int
+        switch meal {
+        case .breakfast: hour = 8
+        case .lunch: hour = 13
+        case .snack: hour = 16
+        case .dinner: hour = 19
+        }
+        return calendar.date(bySettingHour: hour, minute: 0, second: 0, of: day) ?? day
     }
 
-    var caloriesToday: Int {
-        foodEntries
-            .filter { calendar.isDateInToday($0.date) }
-            .reduce(0) { $0 + $1.calories }
+    func food(on day: Date) -> [FoodEntry] {
+        foodEntries.filter { calendar.isDate($0.date, inSameDayAs: day) }
+    }
+
+    func food(on day: Date, meal: MealType) -> [FoodEntry] {
+        food(on: day).filter { $0.meal == meal }.sorted { $0.date < $1.date }
+    }
+
+    func todayFood(for meal: MealType) -> [FoodEntry] {
+        food(on: .now, meal: meal)
+    }
+
+    func calories(on day: Date) -> Int {
+        food(on: day).reduce(0) { $0 + $1.calories }
+    }
+
+    var caloriesToday: Int { calories(on: .now) }
+
+    func macros(on day: Date) -> Macros {
+        food(on: day).compactMap(\.macros).reduce(Macros.zero, +)
+    }
+
+    /// Calories on `day` whose macros are known. Lets the UI say "macros
+    /// cover 1,240 of 1,800 kcal" instead of quietly under-reporting.
+    func caloriesWithMacros(on day: Date) -> Int {
+        food(on: day).filter { $0.macros != nil }.reduce(0) { $0 + $1.calories }
+    }
+
+    /// Distinct foods, most recent first — one tap to log them again.
+    var recentFoods: [FoodEntry] {
+        var seen = Set<String>()
+        var result: [FoodEntry] = []
+        for entry in foodEntries.sorted(by: { $0.date > $1.date }) {
+            let key = entry.name.lowercased()
+            guard !seen.contains(key) else { continue }
+            seen.insert(key)
+            result.append(entry)
+            if result.count == 10 { break }
+        }
+        return result
+    }
+
+    /// Consecutive days with at least one food logged, counting back from
+    /// today (or yesterday, if today is still empty).
+    var foodLogStreak: Int {
+        consecutiveDays(in: Set(foodEntries.map { dayKey($0.date) }))
+    }
+
+    func updateNutritionGoals(_ goals: NutritionGoals) {
+        nutritionGoals = goals
+        save()
+    }
+
+    // MARK: - Water
+
+    func water(on day: Date) -> Int { waterByDay[dayKey(day)] ?? 0 }
+
+    var waterToday: Int { water(on: .now) }
+
+    func addWater(_ milliliters: Int, on day: Date = .now) {
+        let key = dayKey(day)
+        let updated = max(0, (waterByDay[key] ?? 0) + milliliters)
+        waterByDay[key] = updated == 0 ? nil : updated
+        save()
     }
 
     // MARK: - Wake
@@ -835,10 +961,14 @@ final class AppStore {
         return recent.reduce(0) { $0 + $1.hours } / Double(recent.count)
     }
 
-    /// Consecutive days with a logged night, counting back from the most
-    /// recent session's wake date.
+    /// Consecutive days with a logged night, keyed by wake date.
     var sleepLogStreak: Int {
-        let days = Set(sleepSessions.map { dayKey($0.wakeTime) })
+        consecutiveDays(in: Set(sleepSessions.map { dayKey($0.wakeTime) }))
+    }
+
+    /// Length of the run of consecutive day keys ending today — or
+    /// yesterday, so an evening that hasn't been logged yet doesn't reset it.
+    private func consecutiveDays(in days: Set<String>) -> Int {
         guard !days.isEmpty else { return 0 }
         var streak = 0
         var offset = days.contains(dayKey()) ? 0 : 1
@@ -1240,6 +1370,196 @@ final class AppStore {
         return Int((Double(completed) / Double(planned) * 100).rounded())
     }
 
+    // MARK: - Progress
+
+    enum Aggregation { case sum, average }
+
+    func rangeStart(_ range: ProgressRange) -> Date {
+        let today = calendar.startOfDay(for: .now)
+        return calendar.date(byAdding: .day, value: -(range.days - 1), to: today) ?? today
+    }
+
+    private func isInRange(_ date: Date, _ range: ProgressRange) -> Bool {
+        let startOfToday = calendar.startOfDay(for: .now)
+        let endOfToday = calendar.date(byAdding: .day, value: 1, to: startOfToday) ?? .now
+        return date >= rangeStart(range) && date < endOfToday
+    }
+
+    /// Collapse raw samples into chart points: first per day, then per
+    /// range bucket (day or week). Days with no samples produce no point,
+    /// so an unlogged day never reads as a zero.
+    private func series(
+        _ samples: [(date: Date, value: Double)],
+        in range: ProgressRange,
+        perDay: Aggregation,
+        perBucket: Aggregation
+    ) -> [DailyPoint] {
+        func combine(_ values: [Double], _ mode: Aggregation) -> Double {
+            let total = values.reduce(0, +)
+            return mode == .sum ? total : total / Double(max(1, values.count))
+        }
+
+        let byDay = Dictionary(grouping: samples.filter { isInRange($0.date, range) }) {
+            calendar.startOfDay(for: $0.date)
+        }
+        let dailyValues = byDay.mapValues { samples in combine(samples.map { $0.value }, perDay) }
+
+        let byBucket = Dictionary(grouping: dailyValues) { entry in
+            calendar.dateInterval(of: range.bucket, for: entry.key)?.start ?? entry.key
+        }
+        return byBucket
+            .map { bucket in DailyPoint(date: bucket.key, value: combine(bucket.value.map { $0.value }, perBucket)) }
+            .sorted { $0.date < $1.date }
+    }
+
+    // Consistency
+
+    /// Commitments in the range that have an outcome: done, missed, or
+    /// from a day that's already over. Rescheduled ones moved elsewhere and
+    /// today's still-open ones haven't had their chance yet.
+    private func resolvedCommitments(in range: ProgressRange) -> [Commitment] {
+        let startOfToday = calendar.startOfDay(for: .now)
+        return commitments.filter { commitment in
+            guard isInRange(commitment.date, range), commitment.status != .rescheduled else { return false }
+            return commitment.status == .completed || commitment.status == .missed || commitment.date < startOfToday
+        }
+    }
+
+    /// Completion rate (0–100) per bucket, over commitments whose day has
+    /// already happened or that were already resolved.
+    func completionSeries(_ range: ProgressRange) -> [DailyPoint] {
+        let resolved = resolvedCommitments(in: range)
+        let byDay = Dictionary(grouping: resolved) { calendar.startOfDay(for: $0.date) }
+        let samples: [(date: Date, value: Double)] = byDay.map { entry in
+            let done = entry.value.filter { $0.status == .completed }.count
+            return (date: entry.key, value: Double(done) / Double(entry.value.count) * 100)
+        }
+        return series(samples, in: range, perDay: .average, perBucket: .average)
+    }
+
+    func completionRate(_ range: ProgressRange) -> Int? {
+        let resolved = resolvedCommitments(in: range)
+        guard !resolved.isEmpty else { return nil }
+        let done = resolved.filter { $0.status == .completed }.count
+        return Int((Double(done) / Double(resolved.count) * 100).rounded())
+    }
+
+    func completedCount(_ range: ProgressRange) -> Int {
+        commitments.filter { isInRange($0.date, range) && $0.status == .completed }.count
+    }
+
+    // Wake
+
+    /// Every day in the range, oldest first, with whether you checked in.
+    func wakeDays(_ range: ProgressRange) -> [(date: Date, checkedIn: Bool)] {
+        let today = calendar.startOfDay(for: .now)
+        return (0..<range.days).reversed().compactMap { offset in
+            guard let day = calendar.date(byAdding: .day, value: -offset, to: today) else { return nil }
+            return (date: day, checkedIn: wakeCheckInDays.contains(dayKey(day)))
+        }
+    }
+
+    func wakeCheckIns(_ range: ProgressRange) -> Int {
+        wakeDays(range).filter { $0.checkedIn }.count
+    }
+
+    // Sleep
+
+    func sleepSessions(in range: ProgressRange) -> [SleepSession] {
+        sleepSessions.filter { isInRange($0.wakeTime, range) }
+    }
+
+    func sleepSeries(_ range: ProgressRange) -> [DailyPoint] {
+        series(sleepSessions.map { (date: $0.wakeTime, value: $0.hours) }, in: range, perDay: .sum, perBucket: .average)
+    }
+
+    // Run
+
+    func runs(in range: ProgressRange) -> [Run] {
+        runs.filter { isInRange($0.date, range) }
+    }
+
+    func runDistanceSeries(_ range: ProgressRange) -> [DailyPoint] {
+        series(runs.map { (date: $0.date, value: $0.kilometers) }, in: range, perDay: .sum, perBucket: .sum)
+    }
+
+    // Gym
+
+    func workouts(in range: ProgressRange) -> [Workout] {
+        workouts.filter { isInRange($0.date, range) }
+    }
+
+    func volumeSeries(_ range: ProgressRange) -> [DailyPoint] {
+        series(workouts.map { (date: $0.date, value: $0.totalVolumeKg) }, in: range, perDay: .sum, perBucket: .sum)
+    }
+
+    /// Heaviest set ever logged per exercise, newest PRs first.
+    var personalRecords: [PersonalRecord] {
+        var best: [String: PersonalRecord] = [:]
+        for workout in workouts {
+            for exercise in workout.exercises {
+                for set in exercise.sets where set.weightKg > 0 && set.reps > 0 {
+                    let isBetter: Bool
+                    if let current = best[exercise.name] {
+                        isBetter = set.weightKg > current.weightKg
+                            || (set.weightKg == current.weightKg && set.reps > current.reps)
+                    } else {
+                        isBetter = true
+                    }
+                    if isBetter {
+                        best[exercise.name] = PersonalRecord(
+                            exercise: exercise.name,
+                            weightKg: set.weightKg,
+                            reps: set.reps,
+                            date: workout.date
+                        )
+                    }
+                }
+            }
+        }
+        return best.values.sorted { $0.date > $1.date }
+    }
+
+    // Diet
+
+    func calorieSeries(_ range: ProgressRange) -> [DailyPoint] {
+        series(foodEntries.map { (date: $0.date, value: Double($0.calories)) }, in: range, perDay: .sum, perBucket: .average)
+    }
+
+    func proteinSeries(_ range: ProgressRange) -> [DailyPoint] {
+        series(
+            foodEntries.compactMap { entry in entry.macros.map { (date: entry.date, value: $0.protein) } },
+            in: range, perDay: .sum, perBucket: .average
+        )
+    }
+
+    /// Days in the range with any food logged.
+    func foodDays(_ range: ProgressRange) -> [Date] {
+        Set(foodEntries.filter { isInRange($0.date, range) }.map { calendar.startOfDay(for: $0.date) })
+            .sorted()
+    }
+
+    /// Average daily macros across logged days in the range.
+    func averageMacros(_ range: ProgressRange) -> Macros? {
+        let days = foodDays(range)
+        guard !days.isEmpty else { return nil }
+        let total = days.map { macros(on: $0) }.reduce(Macros.zero, +)
+        return total.isEmpty ? nil : total.scaled(by: 1 / Double(days.count))
+    }
+
+    func waterSeries(_ range: ProgressRange) -> [DailyPoint] {
+        let samples: [(date: Date, value: Double)] = waterByDay.compactMap { key, ml in
+            date(fromDayKey: key).map { (date: $0, value: Double(ml)) }
+        }
+        return series(samples, in: range, perDay: .sum, perBucket: .average)
+    }
+
+    // Body
+
+    func weightSeries(_ range: ProgressRange) -> [DailyPoint] {
+        series(weightEntries.map { (date: $0.date, value: $0.kilograms) }, in: range, perDay: .average, perBucket: .average)
+    }
+
     // MARK: - Persistence (local JSON; replace with backend sync later)
 
     private struct Snapshot: Codable {
@@ -1265,6 +1585,9 @@ final class AppStore {
         var bedtime: BedtimeConfig?
         var sleepSessions: [SleepSession]?
         var socialEvents: [SocialEvent]?
+        var nutritionGoals: NutritionGoals?
+        var waterByDay: [String: Int]?
+        var hasSeenIntro: Bool?
         var moodByDay: [String: String]
         var chats: [UUID: [ChatMessage]]
     }
@@ -1304,6 +1627,9 @@ final class AppStore {
             bedtime: bedtime,
             sleepSessions: sleepSessions,
             socialEvents: socialEvents,
+            nutritionGoals: nutritionGoals,
+            waterByDay: waterByDay,
+            hasSeenIntro: hasSeenIntro,
             moodByDay: moodByDay,
             chats: chats
         )
@@ -1340,7 +1666,10 @@ final class AppStore {
         weightEntries = snapshot.weightEntries ?? []
         foodEntries = snapshot.foodEntries ?? []
         progressPhotos = snapshot.progressPhotos ?? []
-        calorieBudget = snapshot.calorieBudget ?? 2200
+        nutritionGoals = snapshot.nutritionGoals ?? NutritionGoals(calories: snapshot.calorieBudget ?? 2200)
+        waterByDay = snapshot.waterByDay ?? [:]
+        // Anyone who already signed in before the intro existed has seen enough.
+        hasSeenIntro = snapshot.hasSeenIntro ?? (snapshot.account != nil)
         cuisineContext = snapshot.cuisineContext ?? ""
         wake = snapshot.wake ?? WakeConfig()
         wakeCheckInDays = snapshot.wakeCheckInDays ?? []

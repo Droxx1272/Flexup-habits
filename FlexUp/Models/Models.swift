@@ -351,8 +351,12 @@ struct FoodItem: Identifiable, Codable, Hashable {
     /// True for things the user added by hand — cooking fats and other
     /// ingredients a photo can't show.
     var isAddOn: Bool = false
+    /// Nutrients for the portion in `portion`, before adjustment. Optional
+    /// so items saved before macro tracking still decode.
+    var baseMacros: Macros?
 
     var calories: Int { Int((Double(baseCalories) * multiplier).rounded()) }
+    var macros: Macros? { baseMacros?.scaled(by: multiplier) }
 
     var multiplierLabel: String {
         multiplier == multiplier.rounded()
@@ -373,6 +377,96 @@ struct FoodEntry: Identifiable, Codable, Hashable {
     /// Per-component breakdown when the entry came from a photo estimate.
     /// Optional so entries saved before itemisation still decode.
     var items: [FoodItem]?
+    /// Protein/carbs/fat and friends. Nil when only calories are known —
+    /// older entries and hand-typed numbers — so totals can say honestly
+    /// how much of the day they cover.
+    var macros: Macros?
+}
+
+/// Grams, except sodium. Everything the Diet tab shows beyond calories.
+struct Macros: Codable, Hashable {
+    var protein: Double = 0
+    var carbs: Double = 0
+    var fat: Double = 0
+    var fiber: Double = 0
+    var sugar: Double = 0
+    var sodiumMg: Double = 0
+
+    static let zero = Macros()
+
+    static func + (lhs: Macros, rhs: Macros) -> Macros {
+        Macros(
+            protein: lhs.protein + rhs.protein,
+            carbs: lhs.carbs + rhs.carbs,
+            fat: lhs.fat + rhs.fat,
+            fiber: lhs.fiber + rhs.fiber,
+            sugar: lhs.sugar + rhs.sugar,
+            sodiumMg: lhs.sodiumMg + rhs.sodiumMg
+        )
+    }
+
+    func scaled(by factor: Double) -> Macros {
+        Macros(
+            protein: protein * factor,
+            carbs: carbs * factor,
+            fat: fat * factor,
+            fiber: fiber * factor,
+            sugar: sugar * factor,
+            sodiumMg: sodiumMg * factor
+        )
+    }
+
+    /// Energy from the three macronutrients (4 / 4 / 9 kcal per gram).
+    var calorieSplit: (protein: Double, carbs: Double, fat: Double) {
+        (protein * 4, carbs * 4, fat * 9)
+    }
+
+    var isEmpty: Bool { protein + carbs + fat + fiber + sugar + sodiumMg == 0 }
+
+    /// "P 30 · C 45 · F 12" — the compact line under a food row.
+    var shortLabel: String {
+        "P \(Int(protein.rounded())) · C \(Int(carbs.rounded())) · F \(Int(fat.rounded()))"
+    }
+}
+
+/// Daily targets. Calories used to live alone as `calorieBudget`; the store
+/// still exposes that name so nothing downstream had to change.
+struct NutritionGoals: Codable, Hashable {
+    var calories: Int = 2200
+    var protein: Int = 130
+    var carbs: Int = 240
+    var fat: Int = 70
+    var fiber: Int = 30
+    var waterMl: Int = 2500
+}
+
+/// A starting point for macro targets. Protein stays high in every
+/// direction — it's what keeps muscle while cutting and builds it while
+/// gaining.
+enum DietDirection: String, CaseIterable, Identifiable {
+    case lose = "Lose"
+    case maintain = "Maintain"
+    case build = "Build"
+
+    var id: String { rawValue }
+
+    /// Share of calories from protein / carbs / fat.
+    var split: (protein: Double, carbs: Double, fat: Double) {
+        switch self {
+        case .lose: (0.35, 0.35, 0.30)
+        case .maintain: (0.25, 0.45, 0.30)
+        case .build: (0.25, 0.50, 0.25)
+        }
+    }
+
+    func goals(calories: Int, keeping current: NutritionGoals) -> NutritionGoals {
+        var goals = current
+        goals.calories = calories
+        goals.protein = Int((Double(calories) * split.protein / 4).rounded())
+        goals.carbs = Int((Double(calories) * split.carbs / 4).rounded())
+        goals.fat = Int((Double(calories) * split.fat / 9).rounded())
+        return goals
+    }
 }
 
 // MARK: - Lift (training log)
@@ -607,6 +701,54 @@ struct Celebration {
 }
 
 // MARK: - Stats
+
+// MARK: - Progress
+
+/// The window the Progress page looks back over. Short ranges chart by
+/// day; long ones by week so the bars stay readable.
+enum ProgressRange: String, CaseIterable, Identifiable {
+    case week = "7D"
+    case month = "30D"
+    case quarter = "90D"
+    case year = "1Y"
+
+    var id: String { rawValue }
+
+    var days: Int {
+        switch self {
+        case .week: 7
+        case .month: 30
+        case .quarter: 90
+        case .year: 365
+        }
+    }
+
+    var bucket: Calendar.Component { days <= 30 ? .day : .weekOfYear }
+
+    var label: String {
+        switch self {
+        case .week: "last 7 days"
+        case .month: "last 30 days"
+        case .quarter: "last 90 days"
+        case .year: "last year"
+        }
+    }
+}
+
+/// One bar or point on a progress chart.
+struct DailyPoint: Identifiable, Hashable {
+    var date: Date
+    var value: Double
+    var id: Date { date }
+}
+
+struct PersonalRecord: Identifiable, Hashable {
+    var exercise: String
+    var weightKg: Double
+    var reps: Int
+    var date: Date
+    var id: String { exercise }
+}
 
 struct DayStat: Identifiable {
     var id = UUID()

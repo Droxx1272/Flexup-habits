@@ -2,10 +2,11 @@ import SwiftUI
 
 /// Where the core loop closes. Habits materialize commitments onto each
 /// day; this is the screen where you see them, do them, and check them off.
-/// Stats lives one segment away.
+/// Progress (every pillar over time) and Stats live one segment away.
 struct TodayView: View {
     enum Section: String, CaseIterable, Identifiable {
         case today = "Today"
+        case progress = "Progress"
         case stats = "Stats"
         var id: String { rawValue }
     }
@@ -38,6 +39,8 @@ struct TodayView: View {
                         progressCard
                         commitmentsSection
                         planRow
+                    case .progress:
+                        ProgressSection()
                     case .stats:
                         StatsSection()
                     }
