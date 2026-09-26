@@ -129,7 +129,7 @@ struct PrivacyDataView: View {
                     .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
                 }
 
-                if store.community.isSignedIn {
+                if store.isSignedIn {
                     VStack(alignment: .leading, spacing: 8) {
                         Button("Delete account", role: .destructive) { confirmDelete = true }
                             .buttonStyle(SecondaryButtonStyle(tint: Theme.danger))
@@ -150,9 +150,8 @@ struct PrivacyDataView: View {
             Button("Delete account", role: .destructive) {
                 Task { @MainActor in
                     do {
-                        try await store.community.deleteAccount()
+                        try await store.deleteAccount()
                         deleteError = nil
-                        store.signOut()
                     } catch {
                         deleteError = error.localizedDescription
                     }
@@ -160,7 +159,7 @@ struct PrivacyDataView: View {
             }
             Button("Keep my account", role: .cancel) {}
         } message: {
-            Text("This permanently removes your FlexUp account and everything stored with it on our server. Logs kept only on this phone stay here.")
+            Text("This permanently deletes your FlexUp account and all of your data — on our server and on this phone. It can't be undone.")
         }
     }
 

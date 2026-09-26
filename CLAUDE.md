@@ -39,6 +39,8 @@ FlexUp is a SwiftUI iOS app (iOS 17+, Xcode 16 folder-synchronized project, zero
 - Dormant (built but out of the tab bar, kept for later): Home, Discover, Squad (feed + memories), Calendar, Track hub, Profile — they must keep compiling. `CommitmentDetailSheet`, `CommitmentRow` and `PlanSheet` live under those folders but **are** reachable from `TodayView`.
 - Tabs are Wake · Run · Gym · Diet · Today. `TodayView` owns the navigation and toggles between the commitments list, `CommunitySection`, `ProgressSection` and `StatsSection` (plain content views with no navigation of their own, like `RunSection`/`LiftSection`/`FuelSection`). Crew management is `CrewView` (pushed from your profile / the bell).
 - Goals & preferences from onboarding live in `store.goals` (`UserGoals`: focuses, weekly run/gym targets, weights) and `store.reminders`; `store.weekProgress` measures the calendar week against them.
+- Your own avatar is always `MyAvatar(size:ring:)` (server photo when community is on, else the local `store.profilePhotoURL`, else initials); `ProfilePhotoEditor` sets it (camera/library/remove → `store.setProfilePhoto`, 800px JPEG in the photos directory, `UserProfile.photoFileName`).
+- Account deletion is `store.deleteAccount()`: server account first (if signed in there), then `eraseAllData()` wipes this phone (logs, photos, alarm, notifications) back to the intro. It's offered whenever `store.isSignedIn`, local-only accounts included (App Store 5.1.1(v)).
 
 ## Wake alarm constraints
 

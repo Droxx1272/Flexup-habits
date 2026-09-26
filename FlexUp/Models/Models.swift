@@ -676,6 +676,8 @@ struct UserProfile: Codable {
     var identityStatement: String
     var interests: [ActivityCategory]
     var joinedAt: Date = .now
+    /// Profile photo in the app's photo directory. Optional so older saves decode.
+    var photoFileName: String?
 }
 
 // MARK: - Coach

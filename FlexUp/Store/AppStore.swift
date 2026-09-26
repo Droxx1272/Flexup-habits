@@ -90,6 +90,60 @@ final class AppStore {
         }
     }
 
+    /// Delete the account for good: the server copy first (if there is
+    /// one — a failure there stops everything), then this phone's data.
+    @MainActor
+    func deleteAccount() async throws {
+        if community.isSignedIn {
+            try await community.deleteAccount()
+        }
+        eraseAllData()
+    }
+
+    /// Deleting an account also wipes everything on this phone: logs,
+    /// photos, alarms and reminders. The app returns to its first launch.
+    func eraseAllData() {
+        WakeAlarmScheduler.cancel(id: wake.alarmID)
+        let center = UNUserNotificationCenter.current()
+        center.removeAllPendingNotificationRequests()
+        center.removeAllDeliveredNotifications()
+        try? FileManager.default.removeItem(at: photosDirectory)
+
+        profile = nil
+        account = nil
+        habits = []
+        commitments = []
+        runs = []
+        workouts = []
+        routines = []
+        weightEntries = []
+        foodEntries = []
+        progressPhotos = []
+        nutritionGoals = NutritionGoals()
+        waterByDay = [:]
+        hasSeenIntro = false
+        sharing = SharingSettings()
+        goals = UserGoals()
+        reminders = ReminderPreferences()
+        aiPhotoConsent = nil
+        cuisineContext = ""
+        wake = WakeConfig()
+        wakeCheckInDays = []
+        bedtime = BedtimeConfig()
+        sleepSessions = []
+        moodByDay = [:]
+        chats = [:]
+        celebration = nil
+        seedWorld()
+        socialEvents = SampleData.socialEvents(activities: activities)
+        save()
+
+        let community = self.community
+        Task { @MainActor in
+            await community.logOut()
+        }
+    }
+
     /// The app's key for "today" — shared with the server so friends'
     /// "done today" means the same day on both sides.
     var todayKey: String { dayKey() }
@@ -108,6 +162,31 @@ final class AppStore {
         reminders = preferences
         save()
         updateHabitReminders()
+    }
+
+    // MARK: - Profile
+
+    var profilePhotoURL: URL? {
+        profile?.photoFileName.map { imageURL(fileName: $0) }
+    }
+
+    /// Replace (or with nil, remove) the profile photo. Stays on this phone.
+    func setProfilePhoto(_ data: Data?) {
+        guard profile != nil else { return }
+        if let old = profile?.photoFileName {
+            try? FileManager.default.removeItem(at: imageURL(fileName: old))
+        }
+        profile?.photoFileName = data.flatMap { saveImage($0) }
+        save()
+    }
+
+    func updateProfile(name: String, identity: String) {
+        let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard profile != nil, !trimmedName.isEmpty else { return }
+        profile?.name = trimmedName
+        let trimmedIdentity = identity.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmedIdentity.isEmpty { profile?.identityStatement = trimmedIdentity }
+        save()
     }
 
     func setAIPhotoConsent(_ allowed: Bool) {

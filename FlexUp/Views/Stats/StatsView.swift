@@ -33,7 +33,7 @@ struct StatsSection: View {
 
     private var identityRow: some View {
         HStack(spacing: 12) {
-            AvatarCircle(name: store.profile?.name ?? "You", size: 46)
+            MyAvatar(size: 46)
             VStack(alignment: .leading, spacing: 2) {
                 Text((store.profile?.name ?? "You").uppercased())
                     .font(.flexDisplay(20))
@@ -228,7 +228,7 @@ struct StatsSection: View {
                 }
                 .buttonStyle(.plain)
 
-                if store.community.isSignedIn {
+                if store.isSignedIn {
                     Button {
                         confirmDelete = true
                     } label: {
@@ -258,9 +258,8 @@ struct StatsSection: View {
             Button("Delete account", role: .destructive) {
                 Task { @MainActor in
                     do {
-                        try await store.community.deleteAccount()
+                        try await store.deleteAccount()
                         deleteError = nil
-                        store.signOut()
                     } catch {
                         deleteError = error.localizedDescription
                     }
@@ -268,7 +267,7 @@ struct StatsSection: View {
             }
             Button("Keep my account", role: .cancel) {}
         } message: {
-            Text("This permanently removes your FlexUp account and everything stored with it on our server. Logs kept only on this phone stay here.")
+            Text("This permanently deletes your FlexUp account and all of your data — on our server and on this phone. It can't be undone.")
         }
     }
 

@@ -7,31 +7,38 @@ import UserNotifications
 struct MyProfileView: View {
     @Environment(AppStore.self) private var store
     @Environment(\.dismiss) private var dismiss
+    @State private var showEdit = false
+
+    private var usesServerProfile: Bool {
+        FeatureFlags.community && store.community.me != nil && store.community.isSignedIn
+    }
 
     var body: some View {
         Group {
-            if FeatureFlags.community, let me = store.community.me, store.community.isSignedIn {
+            if usesServerProfile, let me = store.community.me {
                 MemberProfileView(userID: me.id)
             } else {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 18) {
-                        HStack(spacing: 14) {
-                            ProfileAvatar(name: store.profile?.name ?? store.account?.name ?? "", avatarId: nil, size: 64, ring: true)
-                            VStack(alignment: .leading, spacing: 3) {
-                                Text(store.profile?.name ?? store.account?.name ?? "You")
-                                    .font(.system(size: 26, weight: .black))
-                                    .foregroundStyle(Theme.ink)
-                                Text("BECOMING \((store.profile?.identityStatement ?? "consistent").uppercased())")
-                                    .font(.flexMono(9))
-                                    .tracking(1.5)
-                                    .foregroundStyle(Theme.accent)
+                        VStack(spacing: 10) {
+                            ProfilePhotoEditor(size: 150)
+                                .padding(.top, 10)
+                            Text(store.profile?.name ?? store.account?.name ?? "You")
+                                .font(.system(size: 30, weight: .black))
+                                .foregroundStyle(Theme.ink)
+                                .multilineTextAlignment(.center)
+                            Text("BECOMING \((store.profile?.identityStatement ?? "consistent").uppercased())")
+                                .font(.flexMono(10))
+                                .tracking(1.5)
+                                .foregroundStyle(Theme.accent)
+                                .multilineTextAlignment(.center)
+                            if let email = store.account?.email {
+                                Label(email, systemImage: store.account?.provider == .apple ? "apple.logo" : "envelope")
+                                    .font(.flexCaption())
+                                    .foregroundStyle(Theme.inkSubtle)
                             }
                         }
-                        if let email = store.account?.email {
-                            Label(email, systemImage: store.account?.provider == .apple ? "apple.logo" : "envelope")
-                                .font(.flexCaption())
-                                .foregroundStyle(Theme.inkSubtle)
-                        }
+                        .frame(maxWidth: .infinity)
 
                         weekSummary
 
@@ -94,6 +101,15 @@ struct MyProfileView: View {
             ToolbarItem(placement: .cancellationAction) {
                 Button("Done") { dismiss() }
             }
+            if !usesServerProfile && store.profile != nil {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Edit") { showEdit = true }
+                        .fontWeight(.semibold)
+                }
+            }
+        }
+        .sheet(isPresented: $showEdit) {
+            LocalProfileEditSheet()
         }
         .task {
             if FeatureFlags.community && store.community.isSignedIn && store.community.me == nil {

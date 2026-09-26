@@ -29,10 +29,10 @@ enum Keychain {
         var query = baseQuery
         query[kSecValueData as String] = Data(value.utf8)
         query[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
-        SecItemAdd(query as CFDictionary, nil)
+        _ = SecItemAdd(query as CFDictionary, nil)
     }
 
     static func delete() {
-        SecItemDelete(baseQuery as CFDictionary)
+        _ = SecItemDelete(baseQuery as CFDictionary)
     }
 }

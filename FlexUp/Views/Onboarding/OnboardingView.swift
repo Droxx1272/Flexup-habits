@@ -173,9 +173,10 @@ struct OnboardingView: View {
         .padding(.top, 14)
     }
 
-    /// The profile step only makes sense with a FlexUp account.
+    /// Every step, in order. (Kept as a list so a step can be made
+    /// conditional again without touching navigation.)
     private var activeSteps: [Step] {
-        Step.allCases.filter { $0 != .profile || (FeatureFlags.community && store.community.isSignedIn) }
+        Step.allCases
     }
 
     private var progressFraction: CGFloat {
@@ -241,6 +242,10 @@ struct OnboardingView: View {
         store.updateReminders(ReminderPreferences(habitReminders: habitReminders))
         if bedtimeReminder != store.bedtime.enabled {
             store.setBedtimeReminder(bedtimeReminder)
+        }
+
+        if let photo = avatarImage, let data = photo.flexJPEGData(maxEdge: 800, quality: 0.8) {
+            store.setProfilePhoto(data)
         }
 
         // Profile bits friends see.
@@ -728,7 +733,9 @@ struct OnboardingView: View {
 
     private var profileStep: some View {
         VStack(alignment: .leading, spacing: 24) {
-            stepHeader("Put a face to it", "Your crew sees your photo and city. Both optional.")
+            stepHeader("Put a face to it", FeatureFlags.community
+                       ? "Your crew sees your photo and city. Both optional."
+                       : "Add a photo for your profile. Optional — it stays on your phone.")
 
             HStack {
                 Spacer()
@@ -766,21 +773,23 @@ struct OnboardingView: View {
                 Spacer()
             }
 
-            VStack(alignment: .leading, spacing: 6) {
-                Text("CITY")
-                    .font(.flexMono(10))
-                    .tracking(2)
-                    .foregroundStyle(Theme.inkSubtle)
-                HStack(spacing: 8) {
-                    Image(systemName: "location.fill")
-                        .foregroundStyle(Theme.accent)
-                    TextField("e.g. Noida", text: $location)
-                        .font(.flexBodyBold())
-                        .textContentType(.addressCity)
+            if FeatureFlags.community {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("CITY")
+                        .font(.flexMono(10))
+                        .tracking(2)
+                        .foregroundStyle(Theme.inkSubtle)
+                    HStack(spacing: 8) {
+                        Image(systemName: "location.fill")
+                            .foregroundStyle(Theme.accent)
+                        TextField("e.g. Noida", text: $location)
+                            .font(.flexBodyBold())
+                            .textContentType(.addressCity)
+                    }
+                    .padding(14)
+                    .background(Theme.card)
+                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                 }
-                .padding(14)
-                .background(Theme.card)
-                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
             }
         }
     }

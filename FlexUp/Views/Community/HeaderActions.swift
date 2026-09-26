@@ -26,12 +26,7 @@ struct HeaderActions: View {
             Button {
                 route = .profile
             } label: {
-                ProfileAvatar(
-                    name: community.me?.name ?? store.profile?.name ?? store.account?.name ?? "",
-                    avatarId: community.me?.avatarId,
-                    size: 38,
-                    ring: true
-                )
+                MyAvatar(size: 38, ring: true)
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Your profile")
