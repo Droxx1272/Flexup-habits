@@ -7,6 +7,8 @@ import Charts
 struct StatsSection: View {
     @Environment(AppStore.self) private var store
     @State private var confirmSignOut = false
+    @State private var confirmDelete = false
+    @State private var deleteError: String?
     @State private var showHabits = false
 
     private let achievementColumns = [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())]
@@ -225,6 +227,23 @@ struct StatsSection: View {
                         .foregroundStyle(Theme.accent)
                 }
                 .buttonStyle(.plain)
+
+                if store.community.isSignedIn {
+                    Button {
+                        confirmDelete = true
+                    } label: {
+                        Text("DELETE ACCOUNT")
+                            .font(.flexMono(9))
+                            .tracking(1)
+                            .foregroundStyle(Theme.danger)
+                    }
+                    .buttonStyle(.plain)
+                }
+                if let deleteError {
+                    Text(deleteError)
+                        .font(.flexCaption())
+                        .foregroundStyle(Theme.danger)
+                }
             }
         }
         .confirmationDialog("Sign out of FlexUp?", isPresented: $confirmSignOut, titleVisibility: .visible) {
@@ -234,6 +253,22 @@ struct StatsSection: View {
             Button("Stay signed in", role: .cancel) {}
         } message: {
             Text("Your data stays on this device and is here when you sign back in.")
+        }
+        .confirmationDialog("Delete your FlexUp account?", isPresented: $confirmDelete, titleVisibility: .visible) {
+            Button("Delete account", role: .destructive) {
+                Task { @MainActor in
+                    do {
+                        try await store.community.deleteAccount()
+                        deleteError = nil
+                        store.signOut()
+                    } catch {
+                        deleteError = error.localizedDescription
+                    }
+                }
+            }
+            Button("Keep my account", role: .cancel) {}
+        } message: {
+            Text("This permanently removes your account, friends, and everything you've shared. Logs stored only on this phone stay here.")
         }
     }
 

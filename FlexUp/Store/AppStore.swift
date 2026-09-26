@@ -29,6 +29,12 @@ final class AppStore {
     var waterByDay: [String: Int] = [:]
     /// The paged introduction runs once, before sign-in.
     var hasSeenIntro = false
+    /// Which pillars friends see in their feed.
+    var sharing = SharingSettings()
+
+    /// Friends, cheers and nudges — the part of the app that lives on the
+    /// FlexUp server. Reached as `store.community` so state still has one home.
+    let community = CommunityStore()
     /// How this person actually cooks, in their words. Fed to the photo
     /// estimator so regional dishes aren't scored against Western recipes.
     var cuisineContext: String = ""
@@ -72,6 +78,32 @@ final class AppStore {
     func signOut() {
         account = nil
         save()
+        let community = self.community
+        Task { @MainActor in
+            await community.logOut()
+        }
+    }
+
+    /// The app's key for "today" — shared with the server so friends'
+    /// "done today" means the same day on both sides.
+    var todayKey: String { dayKey() }
+
+    func updateSharing(_ settings: SharingSettings) {
+        sharing = settings
+        save()
+    }
+
+    /// Hand a real, just-logged activity to friends, if that pillar is shared.
+    private func shareWithFriends(_ kind: ActivityKind, title: String, detail: String = "", streak: Int? = nil) {
+        guard sharing.allows(kind) else { return }
+        community.share(PendingActivity(
+            kind: kind,
+            title: title,
+            detail: detail,
+            day: dayKey(),
+            occurredAt: .now,
+            streak: streak
+        ))
     }
 
     private let calendar = Calendar.current
@@ -284,7 +316,9 @@ final class AppStore {
         commitments.first { $0.id == commitment.id } ?? commitment
     }
 
-    func complete(_ commitment: Commitment) {
+    /// `sharesActivity` is false when a logged run or workout completes the
+    /// commitment — that run or workout is shared on its own instead.
+    func complete(_ commitment: Commitment, sharesActivity: Bool = true) {
         guard let index = commitments.firstIndex(where: { $0.id == commitment.id }),
               commitments[index].status != .completed else { return }
 
@@ -297,6 +331,14 @@ final class AppStore {
             habits[habitIndex].streak += 1
             habits[habitIndex].bestStreak = max(habits[habitIndex].bestStreak, habits[habitIndex].streak)
             streak = habits[habitIndex].streak
+        }
+
+        if sharesActivity {
+            shareWithFriends(
+                .habit,
+                title: "Done: \(commitments[index].title)",
+                detail: (streak ?? 0) > 1 ? "\(streak ?? 0) in a row" : ""
+            )
         }
 
         let unlocked = checkUnlocks()
@@ -439,8 +481,16 @@ final class AppStore {
         if let a = unlock("first_run") { unlocked.append(a) }
         if run.kilometers >= 5, let a = unlock("five_k") { unlocked.append(a) }
 
+        if run.kilometers >= 0.1 {
+            shareWithFriends(
+                .run,
+                title: "Ran \(RunFormat.kilometers(run.kilometers)) km",
+                detail: "\(RunFormat.duration(run.duration)) · \(RunFormat.pace(run.paceSecondsPerKm)) /km"
+            )
+        }
+
         if let commitment = todayCommitments.first(where: { $0.category == .run && $0.status != .completed && $0.status != .missed }) {
-            complete(commitment)
+            complete(commitment, sharesActivity: false)
             if celebration?.achievement == nil {
                 celebration?.achievement = unlocked.first
             }
@@ -499,8 +549,14 @@ final class AppStore {
         if let a = unlock("first_lift") { unlocked.append(a) }
         if workout.totalVolumeKg >= 1000, let a = unlock("ton_lifted") { unlocked.append(a) }
 
+        shareWithFriends(
+            .workout,
+            title: "Trained: \(workout.title)",
+            detail: "\(workout.exercises.count) exercises · \(Int(workout.totalVolumeKg)) kg moved"
+        )
+
         if let commitment = todayCommitments.first(where: { $0.category == .gym && $0.status != .completed && $0.status != .missed }) {
-            complete(commitment)
+            complete(commitment, sharesActivity: false)
             if celebration?.achievement == nil {
                 celebration?.achievement = unlocked.first
             }
@@ -789,6 +845,12 @@ final class AppStore {
         if calendar.component(.hour, from: .now) < 8, let a = unlock("early_bird") { unlocked.append(a) }
 
         let streak = wakeStreak
+        shareWithFriends(
+            .wake,
+            title: "Up at \(Date.now.formatted(date: .omitted, time: .shortened))",
+            detail: streak > 1 ? "\(streak)-day wake streak" : "",
+            streak: streak
+        )
         celebration = Celebration(
             title: "Morning won.",
             message: streak > 1
@@ -997,6 +1059,7 @@ final class AppStore {
 
         let hours = Int(session.hours)
         let minutes = Int((session.hours - Double(hours)) * 60)
+        shareWithFriends(.sleep, title: "Slept \(hours)h \(minutes)m", detail: "\(quality.label) quality")
         celebration = Celebration(
             title: "Night logged.",
             message: "\(hours)h \(minutes)m of sleep, \(quality.label.lowercased()) quality. Rest is training too.",
@@ -1589,6 +1652,7 @@ final class AppStore {
         var nutritionGoals: NutritionGoals?
         var waterByDay: [String: Int]?
         var hasSeenIntro: Bool?
+        var sharing: SharingSettings?
         var moodByDay: [String: String]
         var chats: [UUID: [ChatMessage]]
     }
@@ -1631,6 +1695,7 @@ final class AppStore {
             nutritionGoals: nutritionGoals,
             waterByDay: waterByDay,
             hasSeenIntro: hasSeenIntro,
+            sharing: sharing,
             moodByDay: moodByDay,
             chats: chats
         )
@@ -1671,6 +1736,7 @@ final class AppStore {
         waterByDay = snapshot.waterByDay ?? [:]
         // Anyone who already signed in before the intro existed has seen enough.
         hasSeenIntro = snapshot.hasSeenIntro ?? (snapshot.account != nil)
+        sharing = snapshot.sharing ?? SharingSettings()
         cuisineContext = snapshot.cuisineContext ?? ""
         wake = snapshot.wake ?? WakeConfig()
         wakeCheckInDays = snapshot.wakeCheckInDays ?? []

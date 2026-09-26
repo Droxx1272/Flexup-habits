@@ -1,7 +1,9 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { AppAttestError, base64Decode, base64Encode, concat, utf8, verifyAssertion, verifyAttestation } from "./appattest";
 import { CHALLENGE_TTL_SECONDS, checkChallenge, issueChallenge } from "./challenge";
+import { communityRoutes, type CommunityEnv } from "./community";
 import { EstimateMalformedError, EstimateRefusedError, estimateMeal, type ImageMediaType } from "./estimate";
+import { HttpError, fail, json, parseJson, readBody as readLimitedBody } from "./http";
 
 /**
  * FlexUp API. Turns a meal photo into an itemised estimate without the
@@ -15,12 +17,15 @@ import { EstimateMalformedError, EstimateRefusedError, estimateMeal, type ImageM
  *        (assertion signs  challenge ‖ exact request body)
  *   GET  /health
  *
+ * Community (accounts, friends, feed, cheers, nudges) lives in
+ * `community.ts` and authenticates with a bearer session token.
+ *
  * Errors are always `{ "error": { "type", "message" } }`. The app reacts to
  * `attestation_required` (re-register, retry once) and `challenge_expired`
  * (fetch a new challenge, retry once); every message is shown as-is.
  */
 
-export interface Env {
+export interface Env extends CommunityEnv {
   ANTHROPIC_API_KEY: string;
   /** Signs challenges. `openssl rand -hex 32 | npx wrangler secret put CHALLENGE_SECRET` */
   CHALLENGE_SECRET: string;
@@ -34,7 +39,6 @@ export interface Env {
   ALLOW_DEVELOPMENT_ATTESTATION?: string;
   ATTEST_KEYS: KVNamespace;
   INSTALL_LIMITER: RateLimit;
-  IP_LIMITER: RateLimit;
   CHALLENGE_ONCE: RateLimit;
 }
 
@@ -50,27 +54,6 @@ const MAX_IMAGE_BASE64 = 3_000_000;
 const MAX_BODY_BYTES = MAX_IMAGE_BASE64 + 10_000;
 const MAX_TEXT = 500;
 const KEY_ID = /^[A-Za-z0-9+/]{43}=$/;
-
-class HttpError extends Error {
-  constructor(
-    readonly status: number,
-    readonly type: string,
-    message: string,
-  ) {
-    super(message);
-  }
-}
-
-function json(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" },
-  });
-}
-
-function fail(status: number, type: string, message: string): Response {
-  return json({ error: { type, message } }, status);
-}
 
 function cleanText(value: unknown): string {
   return typeof value === "string" ? value.trim().slice(0, MAX_TEXT) : "";
@@ -108,22 +91,8 @@ async function consumeChallenge(env: Env, challenge: string): Promise<void> {
   if (!success) throw new HttpError(401, "challenge_expired", "That request was already used — try again.");
 }
 
-async function readBody(request: Request): Promise<Uint8Array> {
-  const declared = Number(request.headers.get("content-length") ?? "0");
-  if (declared > MAX_BODY_BYTES) throw new HttpError(413, "too_large", "That photo is too large.");
-  const bytes = new Uint8Array(await request.arrayBuffer());
-  if (bytes.length > MAX_BODY_BYTES) throw new HttpError(413, "too_large", "That photo is too large.");
-  return bytes;
-}
-
-function parseJson(bytes: Uint8Array): Record<string, unknown> {
-  try {
-    const value = JSON.parse(new TextDecoder().decode(bytes));
-    if (typeof value === "object" && value !== null) return value as Record<string, unknown>;
-  } catch {
-    // fall through
-  }
-  throw new HttpError(400, "bad_request", "Couldn't read the request.");
+function readBody(request: Request): Promise<Uint8Array> {
+  return readLimitedBody(request, MAX_BODY_BYTES);
 }
 
 function constantTimeEqual(a: string, b: string): boolean {
@@ -280,10 +249,12 @@ async function handleEstimate(request: Request, env: Env): Promise<Response> {
 type Handler = (request: Request, env: Env) => Promise<Response>;
 
 const routes: Record<string, Handler> = {
-  "/v1/attest/challenge": handleChallenge,
-  "/v1/attest/register": handleRegister,
-  "/v1/estimate": handleEstimate,
+  "POST /v1/attest/challenge": handleChallenge,
+  "POST /v1/attest/register": handleRegister,
+  "POST /v1/estimate": handleEstimate,
+  ...communityRoutes(),
 };
+const paths = new Set(Object.keys(routes).map((route) => route.split(" ")[1]));
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
@@ -293,9 +264,12 @@ export default {
       return json({ ok: true, attestation: attestationOn(env) ? "required" : "off" });
     }
 
-    const handler = routes[pathname];
-    if (!handler) return fail(404, "not_found", "Not found.");
-    if (request.method !== "POST") return fail(405, "method_not_allowed", "Use POST.");
+    const handler = routes[`${request.method} ${pathname}`];
+    if (!handler) {
+      return paths.has(pathname)
+        ? fail(405, "method_not_allowed", "Wrong method.")
+        : fail(404, "not_found", "Not found.");
+    }
 
     try {
       return await handler(request, env);

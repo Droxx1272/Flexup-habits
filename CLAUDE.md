@@ -1,6 +1,6 @@
 # FlexUp — notes for Claude Code sessions
 
-FlexUp is a SwiftUI iOS app (iOS 17+, Xcode 16 folder-synchronized project, zero third-party dependencies). Read `README.md` for the product vision. The core loop is **Plan → Commit → Do → Verify → Celebrate → Repeat**; the four pillars are **Wake, Run, Gym, Diet**, plus a **Today** tab (commitments · Progress · Stats).
+FlexUp is a SwiftUI iOS app (iOS 17+, Xcode 16 folder-synchronized project, zero third-party dependencies). Read `README.md` for the product vision. The core loop is **Plan → Commit → Do → Verify → Celebrate → Repeat**; the four pillars are **Wake, Run, Gym, Diet**, plus a **Today** tab (commitments · Friends · Progress · Stats).
 
 ## Build & verify
 
@@ -26,7 +26,8 @@ FlexUp is a SwiftUI iOS app (iOS 17+, Xcode 16 folder-synchronized project, zero
 - Nutrition: `FoodEntry.macros` / `FoodItem.baseMacros` are optional `Macros` (nil = calories only — never fake zeros; the Diet tab reports how many kcal have macro data). `store.nutritionGoals` holds all daily targets; `calorieBudget` is a computed alias onto it. Food can be logged to a past day via `addFood(date:)` / `logDate(for:meal:)`. Water lives in `waterByDay` keyed by `dayKey`.
 - Progress (`FlexUp/Views/Progress/ProgressSection.swift`) reads only store range helpers (`runDistanceSeries`, `sleepSeries`, `calorieSeries`, … via the private `series(_:in:perDay:perBucket:)`), which bucket by day for 7D/30D and by week for 90D/1Y and emit no point for unlogged days.
 - The intro (`FlexUp/Views/Intro/IntroView.swift`) gates on `store.hasSeenIntro` before `AuthView`; older saves default it to "seen" when an account exists.
-- Auth is on-device (`Account` in the store): Sign in with Apple + email fallback. Sign in with Apple needs the capability + paid developer account; the email path always works.
+- Auth: with `BackendConfig` set, `AuthView` creates real server accounts (email + password or Sign in with Apple → `/v1/auth/*`) and stores `Account(userID: server id)`; without it, the old on-device account keeps early builds usable. The session token lives in the Keychain (`FlexUp/Community/Keychain.swift`), never UserDefaults.
+- Community (Friends): `store.community` is a `CommunityStore` owned by `AppStore` — views call its methods, never mutate its arrays. Anything that changes observed state is `@MainActor`. Activities reach friends only through `AppStore.shareWithFriends` from real log paths (`checkInWake`, `logRun`, `logWorkout`, `logSleep`, `complete`), filtered by `store.sharing`; `complete(_:sharesActivity: false)` stops a run/workout being shared twice. Shares queue on disk (`PendingActivity`, idempotent `clientID`) so offline logs arrive later. Server side is `backend/src/community.ts` (D1; schema created lazily in `db.ts` — additive changes only). Friends-only, no free text (preset nudges/cheers, app-generated feed titles), no public discovery — keep it that way. Keep `CommunityModels.swift` in sync with the server's JSON (snake_case → `.convertFromSnakeCase`, ISO dates without fractional seconds).
 
 ## Design system (match it exactly)
 
@@ -35,7 +36,7 @@ FlexUp is a SwiftUI iOS app (iOS 17+, Xcode 16 folder-synchronized project, zero
 - Components in `FlexUp/DesignSystem/Components.swift`: `ScreenHeader` (every tab), `FlexCard`, `PrimaryButtonStyle` (ink pill — one per screen), `SecondaryButtonStyle`, `TrackStat`, `SelectableChip`, `SegmentPills`, `IconBadge`, `AvatarStack`.
 - No XP/levels/follower counts/infinite scroll. Calm, whitespace-heavy, one primary CTA per screen.
 - Dormant (built but out of the tab bar, kept for later): Home, Discover, Squad (feed + memories), Calendar, Track hub, Profile — they must keep compiling. `CommitmentDetailSheet`, `CommitmentRow` and `PlanSheet` live under those folders but **are** reachable from `TodayView`.
-- Tabs are Wake · Run · Gym · Diet · Today. `TodayView` owns the navigation and toggles between the commitments list, `ProgressSection` and `StatsSection` (plain content views with no navigation of their own, like `RunSection`/`LiftSection`/`FuelSection`).
+- Tabs are Wake · Run · Gym · Diet · Today. `TodayView` owns the navigation and toggles between the commitments list, `FriendsSection`, `ProgressSection` and `StatsSection` (plain content views with no navigation of their own, like `RunSection`/`LiftSection`/`FuelSection`).
 
 ## Wake alarm constraints
 

@@ -1,15 +1,19 @@
 import SwiftUI
 import AuthenticationServices
 
-/// The front door. Sign in with Apple is the primary path (App Store
-/// expects it); email creates a local account as fallback. v1 keeps
-/// accounts on-device — a backend later syncs them.
+/// The front door. With the FlexUp server connected, accounts are real:
+/// Sign in with Apple or email + password, the same account your friends
+/// add. Without a server (early development builds) it falls back to an
+/// on-device account so the rest of the app still works.
 struct AuthView: View {
     @Environment(AppStore.self) private var store
     @Environment(\.colorScheme) private var colorScheme
 
     @State private var showEmailForm = false
+    @State private var showAccountSheet = false
+    @State private var accountSheetMode: CommunityAuthSheet.Mode = .create
     @State private var authError: String?
+    @State private var isWorking = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -37,16 +41,41 @@ struct AuthView: View {
                 SignInWithAppleButton(.signIn) { request in
                     request.requestedScopes = [.fullName, .email]
                 } onCompletion: { result in
-                    handleApple(result)
+                    if BackendConfig.isConfigured {
+                        Task { await handleServerApple(result) }
+                    } else {
+                        handleApple(result)
+                    }
                 }
                 .signInWithAppleButtonStyle(colorScheme == .dark ? .white : .black)
                 .frame(height: 54)
                 .clipShape(Capsule())
+                .disabled(isWorking)
 
-                Button("Continue with email") {
-                    showEmailForm = true
+                if BackendConfig.isConfigured {
+                    Button("Create account with email") {
+                        accountSheetMode = .create
+                        showAccountSheet = true
+                    }
+                    .buttonStyle(SecondaryButtonStyle())
+
+                    Button {
+                        accountSheetMode = .login
+                        showAccountSheet = true
+                    } label: {
+                        Text("I HAVE AN ACCOUNT — LOG IN")
+                            .font(.flexMono(10))
+                            .tracking(1.5)
+                            .foregroundStyle(Theme.accent)
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.top, 2)
+                } else {
+                    Button("Continue with email") {
+                        showEmailForm = true
+                    }
+                    .buttonStyle(SecondaryButtonStyle())
                 }
-                .buttonStyle(SecondaryButtonStyle())
 
                 if let authError {
                     Text(authError)
@@ -55,7 +84,9 @@ struct AuthView: View {
                         .multilineTextAlignment(.center)
                 }
 
-                Text("YOUR DATA STAYS ON YOUR DEVICE.")
+                Text(BackendConfig.isConfigured
+                     ? "YOUR LOGS STAY ON YOUR PHONE. FRIENDS SEE ONLY WHAT YOU SHARE."
+                     : "YOUR DATA STAYS ON YOUR DEVICE.")
                     .font(.flexMono(9))
                     .tracking(1.5)
                     .foregroundStyle(Theme.inkSubtle)
@@ -67,6 +98,39 @@ struct AuthView: View {
         .background(Theme.background)
         .sheet(isPresented: $showEmailForm) {
             EmailSignInSheet()
+        }
+        .sheet(isPresented: $showAccountSheet) {
+            CommunityAuthSheet(initialMode: accountSheetMode) { me, provider in
+                signIn(me, provider: provider)
+            }
+        }
+    }
+
+    private func signIn(_ me: CommunityMe, provider: AuthProvider) {
+        store.signIn(Account(userID: me.id, name: me.name, email: me.email, provider: provider))
+    }
+
+    @MainActor
+    private func handleServerApple(_ result: Result<ASAuthorization, Error>) async {
+        guard case .success(let authorization) = result,
+              let credential = authorization.credential as? ASAuthorizationAppleIDCredential,
+              let tokenData = credential.identityToken,
+              let identityToken = String(data: tokenData, encoding: .utf8) else {
+            if case .failure(let error) = result, (error as? ASAuthorizationError)?.code == .canceled { return }
+            authError = "Apple sign-in isn't available on this build — use email below."
+            return
+        }
+        let fullName = [credential.fullName?.givenName, credential.fullName?.familyName]
+            .compactMap { $0 }
+            .joined(separator: " ")
+        isWorking = true
+        authError = nil
+        defer { isWorking = false }
+        do {
+            let me = try await store.community.signInWithApple(identityToken: identityToken, name: fullName)
+            signIn(me, provider: .apple)
+        } catch {
+            authError = error.localizedDescription
         }
     }
 

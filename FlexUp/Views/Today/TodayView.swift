@@ -2,10 +2,11 @@ import SwiftUI
 
 /// Where the core loop closes. Habits materialize commitments onto each
 /// day; this is the screen where you see them, do them, and check them off.
-/// Progress (every pillar over time) and Stats live one segment away.
+/// Friends, Progress (every pillar over time) and Stats live one segment away.
 struct TodayView: View {
     enum Section: String, CaseIterable, Identifiable {
         case today = "Today"
+        case friends = "Friends"
         case progress = "Progress"
         case stats = "Stats"
         var id: String { rawValue }
@@ -37,8 +38,11 @@ struct TodayView: View {
                     switch section {
                     case .today:
                         progressCard
+                        crewBanner
                         commitmentsSection
                         planRow
+                    case .friends:
+                        FriendsSection()
                     case .progress:
                         ProgressSection()
                     case .stats:
@@ -51,6 +55,12 @@ struct TodayView: View {
             .scrollIndicators(.hidden)
             .background(Theme.background)
             .toolbar(.hidden, for: .navigationBar)
+            .refreshable {
+                await store.community.refresh(day: store.todayKey)
+            }
+            .task {
+                await store.community.refresh(day: store.todayKey)
+            }
             .sheet(item: $selectedCommitment) { commitment in
                 CommitmentDetailSheet(commitment: commitment)
             }
@@ -95,6 +105,43 @@ struct TodayView: View {
         if done == total { return "All done. Go live your life." }
         if done == 0 { return "\(total) waiting. Start with the easiest." }
         return "\(done) of \(total) done — keep the thread going."
+    }
+
+    // MARK: Crew
+
+    /// Nudges from friends surface where the day's work is, not buried a tab away.
+    @ViewBuilder
+    private var crewBanner: some View {
+        let nudges = store.community.nudges
+        if let first = nudges.first {
+            Button {
+                withAnimation(.spring(duration: 0.25)) { section = .friends }
+            } label: {
+                HStack(spacing: 12) {
+                    AvatarCircle(name: first.from.name, size: 34)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(nudges.count == 1
+                             ? "\(first.from.name): \(first.message)"
+                             : "\(nudges.count) nudges from your crew")
+                            .font(.flexBodyBold())
+                            .foregroundStyle(Theme.ink)
+                            .lineLimit(1)
+                        Text("TAP TO SEE YOUR CREW")
+                            .font(.flexMono(9))
+                            .tracking(1)
+                            .foregroundStyle(Theme.accent)
+                    }
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(Theme.inkSubtle)
+                }
+                .padding(14)
+                .background(Theme.accentSoft)
+                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+            }
+            .buttonStyle(.plain)
+        }
     }
 
     // MARK: Commitments
