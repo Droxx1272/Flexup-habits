@@ -52,7 +52,7 @@ Snap a plate and Claude Haiku 4.5 vision returns an **itemised** estimate — ca
 - **Correct it by voice or text.** Say or type "cooked in mustard oil, only two rotis" and re-estimate; the correction is passed to the model as authoritative. Hand-added ingredients survive the re-run.
 - **Teach it your kitchen once.** A persisted cuisine context ("North Indian home cooking, mustard oil, moderate ghee") ships with every request, so regional and mixed dishes stop being scored against Western database equivalents. 21 presets, or write your own.
 
-The app never holds an Anthropic key: photos go to a small Cloudflare Worker in [`backend/`](backend/README.md) that holds the key, owns the prompt, rate-limits per install, and returns the itemised estimate (about $0.004–0.005 per photo). Setup is about 10 minutes; until the Worker URL is set in `FlexUp/Support/BackendConfig.swift`, the app says AI estimates aren't switched on and you log by hand.
+The app never holds an Anthropic key: photos go to a small Cloudflare Worker in [`backend/`](backend/README.md) that holds the key, owns the prompt, and returns the itemised estimate (about $0.004–0.005 per photo). The Worker answers only genuine copies of the app on real Apple devices — **App Attest** registers each install's Secure Enclave key once, then every estimate is signed over a single-use server challenge plus the exact photo. Setup is about 15 minutes; until the Worker URL is set in `FlexUp/Support/BackendConfig.swift`, the app says AI estimates aren't switched on and you log by hand.
 
 Discover, Squad (social feed + memories), Calendar, Activity detail, and the coach remain in the codebase but out of the nav — the navigation stays simple until the pillars are solid.
 

@@ -69,9 +69,6 @@ struct MealEstimate: Decodable {
 enum CalorieEstimatorError: LocalizedError {
     case notConfigured
     case badImage
-    case rateLimited(String)
-    case refused(String)
-    case server(String)
     case offline
     case malformed
 
@@ -79,9 +76,6 @@ enum CalorieEstimatorError: LocalizedError {
         switch self {
         case .notConfigured: "AI estimates aren't switched on in this build yet. Log it by hand for now."
         case .badImage: "Couldn't read that photo."
-        case .rateLimited(let message): message
-        case .refused(let message): message
-        case .server(let message): message
         case .offline: "You're offline — log it by hand, or try again when you're connected."
         case .malformed: "Got an unexpected response — try again."
         }
@@ -90,6 +84,9 @@ enum CalorieEstimatorError: LocalizedError {
 
 enum CalorieEstimator {
 
+    /// Server errors (`ServerError`) and App Attest failures
+    /// (`AppAttestClient.Failure`) surface with messages written for the
+    /// person holding the phone.
     static func estimate(
         image: UIImage,
         cuisineContext: String = "",
@@ -98,38 +95,44 @@ enum CalorieEstimator {
         guard let baseURL = BackendConfig.baseURL else { throw CalorieEstimatorError.notConfigured }
         guard let jpeg = downscaledJPEG(from: image) else { throw CalorieEstimatorError.badImage }
 
-        let body: [String: Any] = [
+        // Serialized once: App Attest signs these exact bytes.
+        let body = try JSONSerialization.data(withJSONObject: [
             "image": jpeg.base64EncodedString(),
             "media_type": "image/jpeg",
             "cuisine_context": cuisineContext.trimmingCharacters(in: .whitespacesAndNewlines),
             "correction": correction.trimmingCharacters(in: .whitespacesAndNewlines),
-        ]
+        ])
 
+        do {
+            return try await send(body, to: baseURL, isRetry: false)
+        } catch let error as URLError where error.code == .notConnectedToInternet || error.code == .networkConnectionLost {
+            throw CalorieEstimatorError.offline
+        }
+    }
+
+    private static func send(_ body: Data, to baseURL: URL, isRetry: Bool) async throws -> MealEstimate {
         var request = URLRequest(url: baseURL.appendingPathComponent("v1/estimate"))
         request.httpMethod = "POST"
         request.timeoutInterval = 90
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue(BackendConfig.installID, forHTTPHeaderField: "X-FlexUp-Install")
-        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        for (field, value) in try await AppAttestClient.shared.headers(for: body, baseURL: baseURL) {
+            request.setValue(value, forHTTPHeaderField: field)
+        }
+        request.httpBody = body
 
-        let result: (Data, URLResponse)
+        let (data, response) = try await URLSession.shared.data(for: request)
         do {
-            result = try await URLSession.shared.data(for: request)
-        } catch let error as URLError where error.code == .notConnectedToInternet || error.code == .networkConnectionLost {
-            throw CalorieEstimatorError.offline
-        }
-        let (data, response) = result
-
-        guard let http = response as? HTTPURLResponse else {
-            throw CalorieEstimatorError.server("No response from the FlexUp server.")
-        }
-        guard http.statusCode == 200 else {
-            let message = (try? JSONDecoder().decode(ErrorEnvelope.self, from: data))?.error.message
-                ?? "The FlexUp server had a problem (\(http.statusCode))."
-            switch http.statusCode {
-            case 429: throw CalorieEstimatorError.rateLimited(message)
-            case 422: throw CalorieEstimatorError.refused(message)
-            default: throw CalorieEstimatorError.server(message)
+            try ServerError.check(data: data, response: response)
+        } catch let error as ServerError where !isRetry {
+            switch error.type {
+            case "attestation_required":
+                // The server doesn't know this install (or its key) — register again.
+                await AppAttestClient.shared.forgetKey()
+                return try await send(body, to: baseURL, isRetry: true)
+            case "challenge_expired":
+                return try await send(body, to: baseURL, isRetry: true)
+            default:
+                throw error
             }
         }
 
@@ -157,14 +160,5 @@ enum CalorieEstimator {
             image.draw(in: CGRect(origin: .zero, size: newSize))
         }
         return resized.jpegData(compressionQuality: 0.7)
-    }
-
-    private struct ErrorEnvelope: Decodable {
-        struct Detail: Decodable {
-            let type: String
-            let message: String
-        }
-
-        let error: Detail
     }
 }

@@ -1,5 +1,6 @@
-// FlexUp API — a thin proxy so the Anthropic key never ships in the app.
-// Deploy: `npm run deploy`. Set the key once: `npx wrangler secret put ANTHROPIC_API_KEY`.
+// FlexUp API — a thin proxy so the Anthropic key never ships in the app,
+// answering only genuine copies of the app (App Attest).
+// Setup and day-to-day commands: see README.md.
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "flexup-api",
@@ -8,12 +9,31 @@
   "compatibility_flags": ["nodejs_compat"],
   "observability": { "enabled": true },
 
+  "vars": {
+    // Your Apple Developer Team ID (10 characters) — Xcode → target →
+    // Signing & Capabilities, or developer.apple.com → Membership.
+    "APPLE_TEAM_ID": "",
+    "APPLE_BUNDLE_ID": "com.flexup.FlexUp",
+    // "required": only App Attest–verified installs get estimates. "off": skip it.
+    "ATTEST_MODE": "required",
+    // Builds run from Xcode attest in Apple's development environment. Set to
+    // "false" once every user is on an App Store / TestFlight build with the
+    // App Attest capability set to production.
+    "ALLOW_DEVELOPMENT_ATTESTATION": "true"
+  },
+
+  // One small record per install (its public key). Created automatically
+  // on the first `npm run deploy`, which writes the ID back into this file.
+  "kv_namespaces": [{ "binding": "ATTEST_KEYS" }],
+
   // Abuse brakes. The hard ceiling on spend is the monthly limit you set in
-  // the Claude Console — these just stop one device or IP from burning it.
+  // the Claude Console — these stop one device or IP from burning it.
   "ratelimits": [
-    // Per app install: a meal plus a couple of re-estimates is ~3 calls.
+    // Per verified install: a meal plus a couple of re-estimates is ~3 calls.
     { "name": "INSTALL_LIMITER", "namespace_id": "1001", "simple": { "limit": 8, "period": 60 } },
-    // Per IP: allows a household or office sharing one connection.
-    { "name": "IP_LIMITER", "namespace_id": "1002", "simple": { "limit": 30, "period": 60 } }
+    // Per IP, across all endpoints: allows a household sharing one connection.
+    { "name": "IP_LIMITER", "namespace_id": "1002", "simple": { "limit": 40, "period": 60 } },
+    // Makes each 60-second challenge single-use.
+    { "name": "CHALLENGE_ONCE", "namespace_id": "1003", "simple": { "limit": 1, "period": 60 } }
   ]
 }
