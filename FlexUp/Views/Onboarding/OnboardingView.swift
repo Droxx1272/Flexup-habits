@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 /// Onboarding, one question per screen: progress bar and back arrow up top,
 /// a single big question, one pill button at the bottom. Ends with the wake
@@ -7,7 +8,7 @@ struct OnboardingView: View {
     @Environment(AppStore.self) private var store
 
     private enum Step: Int, CaseIterable {
-        case welcome, name, identity, interests, habits, wake
+        case welcome, name, identity, goals, interests, habits, targets, wake, notifications, profile
     }
 
     @State private var step: Step = .welcome
@@ -18,6 +19,21 @@ struct OnboardingView: View {
     @State private var wakeTime = Calendar.current.date(bySettingHour: 6, minute: 30, second: 0, of: .now) ?? .now
     @State private var wakeDays: Set<Int> = [2, 3, 4, 5, 6]
     @State private var wakeAlarm = true
+
+    // Goals & preferences
+    @State private var goalFocuses: Set<GoalFocus> = []
+    @State private var runsPerWeek = 2
+    @State private var gymPerWeek = 3
+    @State private var dietDirection: DietDirection = .maintain
+    @State private var currentWeight: Double?
+    @State private var targetWeight: Double?
+    @State private var habitReminders = true
+    @State private var bedtimeReminder = true
+    @State private var crewPrefs = NotifyPrefs()
+    @State private var avatarImage: UIImage?
+    @State private var location = ""
+    @State private var showCamera = false
+    @State private var showLibrary = false
 
     /// Identity archetypes — the person you're building toward, not a hobby
     /// tag. Picking one shapes the app's voice; "In My Words" opens a field.
@@ -54,17 +70,22 @@ struct OnboardingView: View {
         case .welcome: true
         case .name: !name.trimmingCharacters(in: .whitespaces).isEmpty
         case .identity: true
+        case .goals: !goalFocuses.isEmpty
         case .interests: !interests.isEmpty
         case .habits: !selectedTemplates.isEmpty
+        case .targets: true
         case .wake: !wakeDays.isEmpty
+        case .notifications: true
+        case .profile: true
         }
     }
 
     private var buttonLabel: String {
+        if step == activeSteps.last { return "Start tomorrow morning" }
         switch step {
-        case .welcome: "Get started"
-        case .wake: "Start tomorrow morning"
-        default: "Continue"
+        case .welcome: return "Get started"
+        case .profile: return avatarImage == nil && location.isEmpty ? "Skip for now" : "Continue"
+        default: return "Continue"
         }
     }
 
@@ -78,9 +99,13 @@ struct OnboardingView: View {
                     case .welcome: welcomeStep
                     case .name: nameStep
                     case .identity: identityStep
+                    case .goals: goalsStep
                     case .interests: interestsStep
                     case .habits: habitsStep
+                    case .targets: targetsStep
                     case .wake: wakeStep
+                    case .notifications: notificationsStep
+                    case .profile: profileStep
                     }
                 }
                 .id(step)
@@ -108,6 +133,13 @@ struct OnboardingView: View {
             if name.isEmpty {
                 name = store.account?.name ?? ""
             }
+        }
+        .fullScreenCover(isPresented: $showCamera) {
+            CameraPicker { image in avatarImage = image }
+                .ignoresSafeArea()
+        }
+        .sheet(isPresented: $showLibrary) {
+            LibraryPicker { image in avatarImage = image }
         }
     }
 
@@ -141,24 +173,30 @@ struct OnboardingView: View {
         .padding(.top, 14)
     }
 
+    /// The profile step only makes sense with a FlexUp account.
+    private var activeSteps: [Step] {
+        Step.allCases.filter { $0 != .profile || store.community.isSignedIn }
+    }
+
     private var progressFraction: CGFloat {
-        CGFloat(step.rawValue) / CGFloat(Step.allCases.count - 1)
+        let index = activeSteps.firstIndex(of: step) ?? 0
+        return CGFloat(index) / CGFloat(max(1, activeSteps.count - 1))
     }
 
     // MARK: Navigation
 
     private func advance() {
-        if step == .wake {
+        guard let index = activeSteps.firstIndex(of: step) else { return }
+        if index == activeSteps.count - 1 {
             finish()
-        } else if let next = Step(rawValue: step.rawValue + 1) {
-            step = next
+        } else {
+            step = activeSteps[index + 1]
         }
     }
 
     private func goBack() {
-        if let previous = Step(rawValue: step.rawValue - 1) {
-            step = previous
-        }
+        guard let index = activeSteps.firstIndex(of: step), index > 0 else { return }
+        step = activeSteps[index - 1]
     }
 
     private func finish() {
@@ -186,6 +224,40 @@ struct OnboardingView: View {
         config.enabled = wakeAlarm
         store.wake = config
         store.updateWakeSchedule()
+
+        // Goals and targets drive the Today "This week" card and nutrition.
+        var goals = store.goals
+        goals.focuses = GoalFocus.allCases.filter { goalFocuses.contains($0) }
+        goals.runsPerWeek = runsPerWeek
+        goals.gymPerWeek = gymPerWeek
+        goals.currentWeightKg = currentWeight
+        goals.targetWeightKg = targetWeight
+        store.updateGoals(goals)
+        store.updateNutritionGoals(dietDirection.goals(calories: store.nutritionGoals.calories, keeping: store.nutritionGoals))
+        if let currentWeight, currentWeight > 0 {
+            store.logWeight(currentWeight)
+        }
+
+        store.updateReminders(ReminderPreferences(habitReminders: habitReminders))
+        if bedtimeReminder != store.bedtime.enabled {
+            store.setBedtimeReminder(bedtimeReminder)
+        }
+
+        // Profile bits friends see.
+        guard store.community.isSignedIn else { return }
+        let community = store.community
+        let headline = goals.focuses.prefix(2).map(\.label).joined(separator: " · ")
+        let prefs = crewPrefs
+        let photo = avatarImage
+        let city = location.trimmingCharacters(in: .whitespaces)
+        Task { @MainActor in
+            try? await community.updateNotifyPrefs(prefs)
+            var fields: [String: Any] = ["identity": resolvedIdentity]
+            if !headline.isEmpty { fields["goal"] = headline }
+            if !city.isEmpty { fields["location"] = city }
+            try? await community.updateProfile(fields)
+            if let photo { try? await community.setAvatar(photo) }
+        }
     }
 
     // MARK: Step header helper
@@ -341,7 +413,7 @@ struct OnboardingView: View {
 
     private var interestsStep: some View {
         VStack(alignment: .leading, spacing: 24) {
-            stepHeader("Pick your focus", "Choose what you care about — it shapes your starter habits.")
+            stepHeader("What will you actually do?", "Choose the activities you'll show up for — they shape your starter habits.")
             LazyVGrid(columns: interestColumns, spacing: 10) {
                 ForEach(ActivityCategory.allCases) { category in
                     interestCard(category)
@@ -472,6 +544,244 @@ struct OnboardingView: View {
             .padding(14)
             .background(Theme.card)
             .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        }
+    }
+
+    // MARK: Goals
+
+    private var goalsStep: some View {
+        VStack(alignment: .leading, spacing: 24) {
+            stepHeader("What do you want out of this?", "Pick every outcome that matters. We'll measure your weeks against them.")
+            LazyVGrid(columns: interestColumns, spacing: 10) {
+                ForEach(GoalFocus.allCases) { focus in
+                    let isSelected = goalFocuses.contains(focus)
+                    Button {
+                        if isSelected {
+                            goalFocuses.remove(focus)
+                        } else {
+                            goalFocuses.insert(focus)
+                            if focus == .loseFat { dietDirection = .lose }
+                            if focus == .buildMuscle, !goalFocuses.contains(.loseFat) { dietDirection = .build }
+                        }
+                    } label: {
+                        VStack(spacing: 10) {
+                            Image(systemName: focus.icon)
+                                .font(.system(size: 24, weight: .semibold))
+                            Text(focus.label.uppercased())
+                                .font(.flexMono(11))
+                                .tracking(1)
+                                .multilineTextAlignment(.center)
+                        }
+                        .foregroundStyle(isSelected ? Theme.background : Theme.ink)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 22)
+                        .background(isSelected ? Theme.ink : Theme.card)
+                        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+    }
+
+    // MARK: Weekly targets
+
+    private var targetsStep: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            stepHeader("Set your week", "Targets you'd hit on a normal week — not your best one. You can change them any time.")
+
+            targetRow("RUNS PER WEEK", value: $runsPerWeek, range: 0...7, icon: "figure.run")
+            targetRow("GYM SESSIONS PER WEEK", value: $gymPerWeek, range: 0...7, icon: "dumbbell.fill")
+
+            VStack(alignment: .leading, spacing: 10) {
+                Text("EATING FOR")
+                    .font(.flexMono(10))
+                    .tracking(2)
+                    .foregroundStyle(Theme.inkSubtle)
+                HStack(spacing: 8) {
+                    ForEach(DietDirection.allCases) { direction in
+                        SelectableChip(label: direction.rawValue, isSelected: dietDirection == direction) {
+                            dietDirection = direction
+                        }
+                    }
+                }
+                Text("Sets your macro split in Diet. Calories start at \(store.nutritionGoals.calories) kcal — adjust them there.")
+                    .font(.flexCaption())
+                    .foregroundStyle(Theme.inkSubtle)
+            }
+
+            HStack(spacing: 10) {
+                weightField("WEIGHT NOW", value: $currentWeight)
+                weightField("TARGET", value: $targetWeight)
+            }
+            Text("Optional. Weight stays on your phone — it's never shared.")
+                .font(.flexCaption())
+                .foregroundStyle(Theme.inkSubtle)
+        }
+    }
+
+    private func targetRow(_ label: String, value: Binding<Int>, range: ClosedRange<Int>, icon: String) -> some View {
+        HStack {
+            IconBadge(systemName: icon, size: 40)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(label)
+                    .font(.flexMono(9))
+                    .tracking(1.5)
+                    .foregroundStyle(Theme.inkSubtle)
+                Text("\(value.wrappedValue)")
+                    .font(.flexStat(28))
+                    .foregroundStyle(Theme.ink)
+            }
+            Spacer()
+            Stepper(label, value: value, in: range)
+                .labelsHidden()
+        }
+        .padding(14)
+        .background(Theme.card)
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+    }
+
+    private func weightField(_ label: String, value: Binding<Double?>) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(label)
+                .font(.flexMono(9))
+                .tracking(1.5)
+                .foregroundStyle(Theme.inkSubtle)
+            HStack(alignment: .firstTextBaseline, spacing: 4) {
+                TextField("—", value: value, format: .number)
+                    .keyboardType(.decimalPad)
+                    .font(.flexStat(24))
+                    .foregroundStyle(Theme.ink)
+                Text("KG")
+                    .font(.flexMono(10))
+                    .foregroundStyle(Theme.inkSubtle)
+            }
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Theme.card)
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+    }
+
+    // MARK: Notifications
+
+    private var notificationsStep: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            stepHeader("How should we reach you?", "Just enough to keep you honest. Nothing to pull you back for the sake of it.")
+
+            VStack(spacing: 0) {
+                preferenceToggle("Habit reminders", detail: "A heads-up when a habit is due.", icon: "checklist", isOn: $habitReminders)
+                Divider().padding(.leading, 52)
+                preferenceToggle("Bedtime reminder", detail: "Wind down in time for your wake-up.", icon: "moon.zzz", isOn: $bedtimeReminder)
+            }
+            .background(Theme.card)
+            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+
+            if store.community.isSignedIn {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("FROM YOUR CREW")
+                        .font(.flexMono(10))
+                        .tracking(2)
+                        .foregroundStyle(Theme.inkSubtle)
+                    VStack(spacing: 0) {
+                        preferenceToggle("Nudges", detail: "When a friend nudges you to show up.", icon: "hand.wave", isOn: $crewPrefs.nudges)
+                        Divider().padding(.leading, 52)
+                        preferenceToggle("Cheers & kudos", detail: "When friends cheer what you did.", icon: "hand.thumbsup", isOn: $crewPrefs.cheers)
+                        Divider().padding(.leading, 52)
+                        preferenceToggle("Comments", detail: "Replies on your posts.", icon: "text.bubble", isOn: $crewPrefs.comments)
+                        Divider().padding(.leading, 52)
+                        preferenceToggle("Friend requests", detail: "Someone wants you in their crew.", icon: "person.badge.plus", isOn: $crewPrefs.friends)
+                    }
+                    .background(Theme.card)
+                    .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                }
+            }
+
+            Text("Your wake alarm is already set from the last screen. Change any of this later from your profile → Notifications.")
+                .font(.flexCaption())
+                .foregroundStyle(Theme.inkSubtle)
+        }
+    }
+
+    private func preferenceToggle(_ title: String, detail: String, icon: String, isOn: Binding<Bool>) -> some View {
+        Toggle(isOn: isOn) {
+            HStack(spacing: 12) {
+                Image(systemName: icon)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(Theme.accent)
+                    .frame(width: 24)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                        .font(.flexBodyBold())
+                        .foregroundStyle(Theme.ink)
+                    Text(detail)
+                        .font(.flexCaption())
+                        .foregroundStyle(Theme.inkSubtle)
+                }
+            }
+        }
+        .tint(Theme.accent)
+        .padding(14)
+    }
+
+    // MARK: Profile (with a FlexUp account)
+
+    private var profileStep: some View {
+        VStack(alignment: .leading, spacing: 24) {
+            stepHeader("Put a face to it", "Your crew sees your photo and city. Both optional.")
+
+            HStack {
+                Spacer()
+                ZStack(alignment: .bottomTrailing) {
+                    Group {
+                        if let avatarImage {
+                            Image(uiImage: avatarImage)
+                                .resizable()
+                                .scaledToFill()
+                                .frame(width: 150, height: 150)
+                                .clipShape(Circle())
+                        } else {
+                            AvatarCircle(name: name.isEmpty ? "?" : name, size: 150)
+                        }
+                    }
+                    .padding(5)
+                    .overlay(Circle().strokeBorder(ProfileAvatar.ringGradient, lineWidth: 4))
+
+                    Menu {
+                        if UIImagePickerController.isSourceTypeAvailable(.camera) {
+                            Button("Take photo", systemImage: "camera") { showCamera = true }
+                        }
+                        Button("Choose from library", systemImage: "photo.on.rectangle") { showLibrary = true }
+                    } label: {
+                        Image(systemName: "camera.fill")
+                            .font(.system(size: 17, weight: .semibold))
+                            .foregroundStyle(Theme.background)
+                            .frame(width: 44, height: 44)
+                            .background(Theme.ink)
+                            .clipShape(Circle())
+                            .overlay(Circle().stroke(Theme.background, lineWidth: 4))
+                    }
+                    .offset(x: -4, y: -4)
+                }
+                Spacer()
+            }
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text("CITY")
+                    .font(.flexMono(10))
+                    .tracking(2)
+                    .foregroundStyle(Theme.inkSubtle)
+                HStack(spacing: 8) {
+                    Image(systemName: "location.fill")
+                        .foregroundStyle(Theme.accent)
+                    TextField("e.g. Noida", text: $location)
+                        .font(.flexBodyBold())
+                        .textContentType(.addressCity)
+                }
+                .padding(14)
+                .background(Theme.card)
+                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            }
         }
     }
 }

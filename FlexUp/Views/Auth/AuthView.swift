@@ -10,99 +10,88 @@ struct AuthView: View {
     @Environment(\.colorScheme) private var colorScheme
 
     @State private var showEmailForm = false
-    @State private var showAccountSheet = false
-    @State private var accountSheetMode: CommunityAuthSheet.Mode = .create
     @State private var authError: String?
-    @State private var isWorking = false
 
     var body: some View {
-        VStack(spacing: 0) {
-            Spacer()
+        NavigationStack {
+            VStack(spacing: 0) {
+                Spacer()
 
-            VStack(alignment: .leading, spacing: 18) {
-                Image(systemName: "arrow.up.right.circle.fill")
-                    .font(.system(size: 52))
-                    .foregroundStyle(Theme.accent)
-                Text("FLEXUP")
-                    .font(.flexDisplay(52))
-                    .foregroundStyle(Theme.ink)
-                Text("WAKE. RUN. LIFT. FUEL.\nBECOME WHO YOU SAID YOU'D BE.")
-                    .font(.flexMono(13))
-                    .tracking(2)
-                    .foregroundStyle(Theme.inkSubtle)
-                    .lineSpacing(6)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 28)
+                VStack(alignment: .leading, spacing: 18) {
+                    Image(systemName: "arrow.up.right.circle.fill")
+                        .font(.system(size: 52))
+                        .foregroundStyle(Theme.accent)
+                    Text("FLEXUP")
+                        .font(.flexDisplay(52))
+                        .foregroundStyle(Theme.ink)
+                    Text("WAKE. RUN. LIFT. FUEL.\nBECOME WHO YOU SAID YOU'D BE.")
+                        .font(.flexMono(13))
+                        .tracking(2)
+                        .foregroundStyle(Theme.inkSubtle)
+                        .lineSpacing(6)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 28)
 
-            Spacer()
+                Spacer()
 
-            VStack(spacing: 12) {
-                SignInWithAppleButton(.signIn) { request in
-                    request.requestedScopes = [.fullName, .email]
-                } onCompletion: { result in
+                VStack(spacing: 12) {
                     if BackendConfig.isConfigured {
-                        Task { await handleServerApple(result) }
+                        NavigationLink(value: AccountMode.create) {
+                            Text("Create account")
+                        }
+                        .buttonStyle(PrimaryButtonStyle())
+
+                        NavigationLink(value: AccountMode.login) {
+                            Text("Log in")
+                        }
+                        .buttonStyle(SecondaryButtonStyle())
                     } else {
-                        handleApple(result)
-                    }
-                }
-                .signInWithAppleButtonStyle(colorScheme == .dark ? .white : .black)
-                .frame(height: 54)
-                .clipShape(Capsule())
-                .disabled(isWorking)
+                        SignInWithAppleButton(.signIn) { request in
+                            request.requestedScopes = [.fullName, .email]
+                        } onCompletion: { result in
+                            handleApple(result)
+                        }
+                        .signInWithAppleButtonStyle(colorScheme == .dark ? .white : .black)
+                        .frame(height: 54)
+                        .clipShape(Capsule())
 
-                if BackendConfig.isConfigured {
-                    Button("Create account with email") {
-                        accountSheetMode = .create
-                        showAccountSheet = true
+                        Button("Continue with email") {
+                            showEmailForm = true
+                        }
+                        .buttonStyle(SecondaryButtonStyle())
                     }
-                    .buttonStyle(SecondaryButtonStyle())
 
-                    Button {
-                        accountSheetMode = .login
-                        showAccountSheet = true
-                    } label: {
-                        Text("I HAVE AN ACCOUNT — LOG IN")
-                            .font(.flexMono(10))
-                            .tracking(1.5)
-                            .foregroundStyle(Theme.accent)
+                    if let authError {
+                        Text(authError)
+                            .font(.flexCaption())
+                            .foregroundStyle(Theme.danger)
+                            .multilineTextAlignment(.center)
                     }
-                    .buttonStyle(.plain)
-                    .padding(.top, 2)
-                } else {
-                    Button("Continue with email") {
-                        showEmailForm = true
-                    }
-                    .buttonStyle(SecondaryButtonStyle())
-                }
 
-                if let authError {
-                    Text(authError)
-                        .font(.flexCaption())
-                        .foregroundStyle(Theme.danger)
+                    Text(BackendConfig.isConfigured
+                         ? "YOUR LOGS STAY ON YOUR PHONE. FRIENDS SEE ONLY WHAT YOU SHARE."
+                         : "YOUR DATA STAYS ON YOUR DEVICE.")
+                        .font(.flexMono(9))
+                        .tracking(1.5)
+                        .foregroundStyle(Theme.inkSubtle)
                         .multilineTextAlignment(.center)
+                        .padding(.top, 6)
                 }
-
-                Text(BackendConfig.isConfigured
-                     ? "YOUR LOGS STAY ON YOUR PHONE. FRIENDS SEE ONLY WHAT YOU SHARE."
-                     : "YOUR DATA STAYS ON YOUR DEVICE.")
-                    .font(.flexMono(9))
-                    .tracking(1.5)
-                    .foregroundStyle(Theme.inkSubtle)
-                    .padding(.top, 6)
+                .padding(.horizontal, 24)
+                .padding(.bottom, 24)
             }
-            .padding(.horizontal, 24)
-            .padding(.bottom, 24)
+            .background(Theme.background)
+            .toolbar(.hidden, for: .navigationBar)
+            .navigationDestination(for: AccountMode.self) { mode in
+                AccountPage(mode: mode) { me, provider in
+                    signIn(me, provider: provider)
+                }
+            }
         }
-        .background(Theme.background)
+        .tint(Theme.ink)
         .sheet(isPresented: $showEmailForm) {
             EmailSignInSheet()
-        }
-        .sheet(isPresented: $showAccountSheet) {
-            CommunityAuthSheet(initialMode: accountSheetMode) { me, provider in
-                signIn(me, provider: provider)
-            }
         }
     }
 
@@ -110,30 +99,7 @@ struct AuthView: View {
         store.signIn(Account(userID: me.id, name: me.name, email: me.email, provider: provider))
     }
 
-    @MainActor
-    private func handleServerApple(_ result: Result<ASAuthorization, Error>) async {
-        guard case .success(let authorization) = result,
-              let credential = authorization.credential as? ASAuthorizationAppleIDCredential,
-              let tokenData = credential.identityToken,
-              let identityToken = String(data: tokenData, encoding: .utf8) else {
-            if case .failure(let error) = result, (error as? ASAuthorizationError)?.code == .canceled { return }
-            authError = "Apple sign-in isn't available on this build — use email below."
-            return
-        }
-        let fullName = [credential.fullName?.givenName, credential.fullName?.familyName]
-            .compactMap { $0 }
-            .joined(separator: " ")
-        isWorking = true
-        authError = nil
-        defer { isWorking = false }
-        do {
-            let me = try await store.community.signInWithApple(identityToken: identityToken, name: fullName)
-            signIn(me, provider: .apple)
-        } catch {
-            authError = error.localizedDescription
-        }
-    }
-
+    /// On-device account, used only when no FlexUp server is configured.
     private func handleApple(_ result: Result<ASAuthorization, Error>) {
         switch result {
         case .success(let authorization):

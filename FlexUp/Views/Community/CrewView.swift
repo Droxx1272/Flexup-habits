@@ -1,13 +1,27 @@
 import SwiftUI
 
-/// Accountability with the people who'll actually notice: who's up, who
-/// moved today, a nudge when someone's quiet, a cheer when they show up.
-/// Friends-only by design — no public profiles, no strangers, no follower
-/// counts. Presented as the Friends segment of `TodayView`, so it owns no
-/// navigation of its own.
-struct FriendsSection: View {
+/// "Your crew": your friend code and invite, requests, everyone you're
+/// accountable with and whether they've shown up today, nudges, and what
+/// you share. Friends-only by design — no strangers, no follower counts.
+/// Pushed from your profile or the bell.
+struct CrewView: View {
     @Environment(AppStore.self) private var store
-    @State private var showAuth = false
+
+    var body: some View {
+        ScrollView {
+            CrewContent()
+                .padding(.horizontal, 20)
+                .padding(.bottom, 30)
+        }
+        .background(Theme.background)
+        .navigationTitle("Your crew")
+        .navigationBarTitleDisplayMode(.inline)
+        .refreshable { await store.community.refresh(day: store.todayKey) }
+    }
+}
+
+struct CrewContent: View {
+    @Environment(AppStore.self) private var store
     @State private var showAddFriend = false
     @State private var showSharing = false
     @State private var showProfile = false
@@ -17,28 +31,18 @@ struct FriendsSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
-            if !community.isAvailable {
-                EmptyStateCard(
-                    icon: "person.2",
-                    title: "Friends are almost here",
-                    message: "Friends need the FlexUp server. Once it's connected, invite your crew here and keep each other honest."
-                )
-            } else if !community.isSignedIn {
-                connectCard
+            if !community.isAvailable || !community.isSignedIn {
+                CommunityGateView()
             } else {
                 if let errorMessage = community.errorMessage {
-                    errorBanner(errorMessage)
+                    CommunityErrorBanner(message: errorMessage)
                 }
-                nudgesCard
+                NudgesCard()
                 inviteCard
                 requestsCard
                 crewCard
-                feedSection
                 sharingRow
             }
-        }
-        .sheet(isPresented: $showAuth) {
-            CommunityAuthSheet(initialMode: .create)
         }
         .sheet(isPresented: $showAddFriend) {
             AddFriendSheet()
@@ -47,7 +51,7 @@ struct FriendsSection: View {
             SharingSheet()
         }
         .sheet(isPresented: $showProfile) {
-            CommunityProfileSheet()
+            EditProfileSheet()
         }
         .confirmationDialog(
             "Remove \(friendToRemove?.user.name ?? "friend")?",
@@ -66,87 +70,6 @@ struct FriendsSection: View {
         }
         .task(id: community.isSignedIn) {
             if community.isSignedIn { await community.refresh(day: store.todayKey) }
-        }
-    }
-
-    // MARK: Signed out
-
-    private var connectCard: some View {
-        FlexCard {
-            VStack(alignment: .leading, spacing: 14) {
-                IconBadge(systemName: "person.2.fill")
-                Text("DO IT TOGETHER")
-                    .font(.flexDisplay(26))
-                    .foregroundStyle(Theme.ink)
-                Text("People who tell a friend follow through far more often. Create your FlexUp account, add your crew, and let them see you show up.")
-                    .font(.flexCaption())
-                    .foregroundStyle(Theme.inkSubtle)
-                Button("Create account or log in") {
-                    showAuth = true
-                }
-                .buttonStyle(PrimaryButtonStyle())
-            }
-        }
-    }
-
-    private func errorBanner(_ message: String) -> some View {
-        HStack(alignment: .top, spacing: 10) {
-            Image(systemName: "exclamationmark.circle")
-                .foregroundStyle(Theme.amber)
-            Text(message)
-                .font(.flexCaption())
-                .foregroundStyle(Theme.ink)
-            Spacer()
-            Button {
-                community.errorMessage = nil
-            } label: {
-                Image(systemName: "xmark")
-                    .font(.system(size: 10, weight: .bold))
-                    .foregroundStyle(Theme.inkSubtle)
-            }
-            .buttonStyle(.plain)
-        }
-        .padding(12)
-        .background(Theme.amberSoft)
-        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-    }
-
-    // MARK: Nudges received
-
-    @ViewBuilder
-    private var nudgesCard: some View {
-        if !community.nudges.isEmpty {
-            FlexCard(padding: 16) {
-                VStack(alignment: .leading, spacing: 10) {
-                    HStack {
-                        Text("YOUR CREW IS CALLING")
-                            .font(.flexMono(11))
-                            .tracking(2)
-                            .foregroundStyle(Theme.accent)
-                        Spacer()
-                        Button("Got it") {
-                            Task { await community.dismissNudges() }
-                        }
-                        .font(.flexCaption())
-                        .foregroundStyle(Theme.accent)
-                        .buttonStyle(.plain)
-                    }
-                    ForEach(community.nudges) { nudge in
-                        HStack(spacing: 10) {
-                            AvatarCircle(name: nudge.from.name, size: 30)
-                            VStack(alignment: .leading, spacing: 1) {
-                                Text(nudge.message)
-                                    .font(.flexBodyBold())
-                                    .foregroundStyle(Theme.ink)
-                                Text("\(nudge.from.name.uppercased()) · \(nudge.createdAt.formatted(.relative(presentation: .named)).uppercased())")
-                                    .font(.flexMono(9))
-                                    .tracking(1)
-                                    .foregroundStyle(Theme.inkSubtle)
-                            }
-                        }
-                    }
-                }
-            }
         }
     }
 
@@ -213,7 +136,7 @@ struct FriendsSection: View {
                 SectionHeader(title: "Requests")
                 ForEach(community.incoming) { user in
                     HStack(spacing: 12) {
-                        AvatarCircle(name: user.name, size: 38)
+                        ProfileAvatar(user: user, size: 38)
                         VStack(alignment: .leading, spacing: 2) {
                             Text(user.name)
                                 .font(.flexBodyBold())
@@ -255,7 +178,7 @@ struct FriendsSection: View {
                 }
                 ForEach(community.outgoing) { user in
                     HStack(spacing: 12) {
-                        AvatarCircle(name: user.name, size: 30)
+                        ProfileAvatar(user: user, size: 30)
                         Text("Waiting on \(user.name)")
                             .font(.flexCaption())
                             .foregroundStyle(Theme.inkSubtle)
@@ -296,7 +219,10 @@ struct FriendsSection: View {
                 }
             } else {
                 ForEach(community.friends) { friend in
-                    friendRow(friend)
+                    NavigationLink(value: CommunityDestination.profile(friend.user.id)) {
+                        friendRow(friend)
+                    }
+                    .buttonStyle(.plain)
                         .contextMenu {
                             Button(role: .destructive) {
                                 friendToRemove = friend
@@ -312,7 +238,7 @@ struct FriendsSection: View {
     private func friendRow(_ friend: FriendStatus) -> some View {
         let kinds = friend.todayKinds
         return HStack(spacing: 12) {
-            AvatarCircle(name: friend.user.name, size: 42)
+            ProfileAvatar(user: friend.user, size: 44, ring: !friend.todayKinds.isEmpty)
             VStack(alignment: .leading, spacing: 4) {
                 Text(friend.user.name)
                     .font(.flexBodyBold())
@@ -380,27 +306,6 @@ struct FriendsSection: View {
         }
     }
 
-    // MARK: Feed
-
-    private var feedSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            SectionHeader(title: "This fortnight", subtitle: "Proof, not posts — only what was actually logged.")
-            if community.feed.isEmpty {
-                Text(community.hasLoaded
-                     ? "Nothing yet. Your next wake-up, run or session shows up here for your crew."
-                     : "Loading…")
-                    .font(.flexCaption())
-                    .foregroundStyle(Theme.inkSubtle)
-            } else {
-                ForEach(community.feed) { event in
-                    FeedEventRow(event: event) { emoji in
-                        Task { await community.cheer(event, with: emoji) }
-                    }
-                }
-            }
-        }
-    }
-
     // MARK: Sharing
 
     private var sharingRow: some View {
@@ -436,7 +341,7 @@ struct FeedEventRow: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .top, spacing: 12) {
                 ZStack(alignment: .bottomTrailing) {
-                    AvatarCircle(name: event.user.name, size: 38)
+                    ProfileAvatar(user: event.user, size: 38)
                     if let kind = event.activityKind {
                         Image(systemName: kind.icon)
                             .font(.system(size: 9, weight: .bold))
@@ -641,105 +546,73 @@ struct SharingSheet: View {
     }
 }
 
-// MARK: - Profile
+// MARK: - Shared pieces
 
-struct CommunityProfileSheet: View {
+struct CommunityErrorBanner: View {
     @Environment(AppStore.self) private var store
-    @Environment(\.dismiss) private var dismiss
-    @State private var name = ""
-    @State private var handle = ""
-    @State private var identity = ""
-    @State private var isWorking = false
-    @State private var errorText: String?
+    let message: String
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Capsule()
-                .fill(Theme.inkSubtle.opacity(0.3))
-                .frame(width: 36, height: 5)
-                .frame(maxWidth: .infinity)
-                .padding(.top, 10)
-
-            Text("HOW FRIENDS SEE YOU")
-                .font(.flexMono(12))
-                .tracking(2)
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: "exclamationmark.circle")
+                .foregroundStyle(Theme.amber)
+            Text(message)
+                .font(.flexCaption())
                 .foregroundStyle(Theme.ink)
-
-            labeled("NAME") {
-                TextField("Name", text: $name)
-            }
-            labeled("HANDLE") {
-                HStack(spacing: 2) {
-                    Text("@").foregroundStyle(Theme.inkSubtle)
-                    TextField("handle", text: $handle)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                }
-            }
-            labeled("BECOMING") {
-                TextField("an early riser", text: $identity)
-            }
-
-            if let errorText {
-                Text(errorText)
-                    .font(.flexCaption())
-                    .foregroundStyle(Theme.danger)
-            }
-
             Spacer()
-
             Button {
-                Task { await save() }
+                store.community.errorMessage = nil
             } label: {
-                HStack(spacing: 8) {
-                    if isWorking { ProgressView().controlSize(.small).tint(Theme.background) }
-                    Text("Save")
+                Image(systemName: "xmark")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(Theme.inkSubtle)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(12)
+        .background(Theme.amberSoft)
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+    }
+}
+
+/// Nudges your crew sent you, until you tap "Got it".
+struct NudgesCard: View {
+    @Environment(AppStore.self) private var store
+
+    var body: some View {
+        let nudges = store.community.nudges
+        if !nudges.isEmpty {
+            FlexCard(padding: 16) {
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack {
+                        Text("YOUR CREW IS CALLING")
+                            .font(.flexMono(11))
+                            .tracking(2)
+                            .foregroundStyle(Theme.accent)
+                        Spacer()
+                        Button("Got it") {
+                            Task { await store.community.dismissNudges() }
+                        }
+                        .font(.flexCaption())
+                        .foregroundStyle(Theme.accent)
+                        .buttonStyle(.plain)
+                    }
+                    ForEach(nudges) { nudge in
+                        HStack(spacing: 10) {
+                            ProfileAvatar(user: nudge.from, size: 32)
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text(nudge.message)
+                                    .font(.flexBodyBold())
+                                    .foregroundStyle(Theme.ink)
+                                Text("\(nudge.from.name.uppercased()) · \(nudge.createdAt.formatted(.relative(presentation: .named)).uppercased())")
+                                    .font(.flexMono(9))
+                                    .tracking(1)
+                                    .foregroundStyle(Theme.inkSubtle)
+                            }
+                        }
+                    }
                 }
             }
-            .buttonStyle(PrimaryButtonStyle())
-            .disabled(isWorking || name.trimmingCharacters(in: .whitespaces).isEmpty)
-        }
-        .padding(.horizontal, 20)
-        .padding(.bottom, 12)
-        .background(Theme.background)
-        .presentationDetents([.large])
-        .onAppear {
-            if let me = store.community.me {
-                name = me.name
-                handle = me.handle
-                identity = me.identity
-            }
-        }
-    }
-
-    private func labeled<Content: View>(_ label: String, @ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(label)
-                .font(.flexMono(9))
-                .tracking(1.5)
-                .foregroundStyle(Theme.inkSubtle)
-            content()
-                .font(.flexBodyBold())
-                .padding(14)
-                .background(Theme.card)
-                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-        }
-    }
-
-    @MainActor
-    private func save() async {
-        isWorking = true
-        errorText = nil
-        defer { isWorking = false }
-        do {
-            try await store.community.updateProfile(
-                name: name.trimmingCharacters(in: .whitespaces),
-                handle: handle.trimmingCharacters(in: .whitespaces),
-                identity: identity.trimmingCharacters(in: .whitespaces)
-            )
-            dismiss()
-        } catch {
-            errorText = error.localizedDescription
         }
     }
 }

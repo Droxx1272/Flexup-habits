@@ -10,6 +10,7 @@ import {
 } from "./auth";
 import { ensureSchema, isoNow } from "./db";
 import { HttpError, json, readJson, text } from "./http";
+import { filterText } from "./moderation";
 
 /**
  * Accountability between friends: accounts, friend codes, a friends-only
@@ -25,7 +26,7 @@ export interface CommunityEnv {
   IP_LIMITER: RateLimit;
 }
 
-interface UserRow {
+export interface UserRow {
   id: string;
   email: string | null;
   password_hash: string | null;
@@ -35,6 +36,25 @@ interface UserRow {
   identity: string;
   friend_code: string;
   created_at: string;
+  avatar_id: string | null;
+  location: string;
+  bio: string;
+  goal: string;
+  notify_prefs: string;
+}
+
+/** Which in-app notifications someone wants. Missing keys mean yes. */
+export const NOTIFY_KEYS = ["friends", "nudges", "cheers", "comments", "messages"] as const;
+type NotifyKey = (typeof NOTIFY_KEYS)[number];
+
+export function parsePrefs(raw: string | null | undefined): Record<NotifyKey, boolean> {
+  let parsed: Record<string, unknown> = {};
+  try {
+    parsed = JSON.parse(raw || "{}");
+  } catch {
+    // treat as defaults
+  }
+  return Object.fromEntries(NOTIFY_KEYS.map((key) => [key, parsed[key] !== false])) as Record<NotifyKey, boolean>;
 }
 
 export const EVENT_KINDS = ["wake", "run", "workout", "sleep", "habit", "milestone"] as const;
@@ -54,12 +74,62 @@ const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 // MARK: - Helpers
 
-function publicUser(user: UserRow) {
-  return { id: user.id, name: user.name, handle: user.handle, identity: user.identity };
+export function publicUser(user: UserRow) {
+  return {
+    id: user.id,
+    name: user.name,
+    handle: user.handle,
+    identity: user.identity,
+    avatar_id: user.avatar_id ?? null,
+    location: user.location ?? "",
+  };
 }
 
 function me(user: UserRow) {
-  return { ...publicUser(user), email: user.email, friend_code: user.friend_code, has_apple: user.apple_sub !== null };
+  return {
+    ...publicUser(user),
+    email: user.email,
+    friend_code: user.friend_code,
+    has_apple: user.apple_sub !== null,
+    bio: user.bio ?? "",
+    goal: user.goal ?? "",
+    notify_prefs: parsePrefs(user.notify_prefs),
+  };
+}
+
+const NOTIFICATION_PREF: Record<string, NotifyKey> = {
+  friend_request: "friends",
+  friend_accepted: "friends",
+  nudge: "nudges",
+  cheer: "cheers",
+  kudos: "cheers",
+  comment: "comments",
+};
+
+/** Record something for `recipient`'s bell — unless they've turned that kind off. */
+export async function notify(
+  db: D1Database,
+  recipient: string,
+  actor: string,
+  type: keyof typeof NOTIFICATION_PREF,
+  extras: { postId?: string; text?: string } = {},
+): Promise<void> {
+  if (recipient === actor) return;
+  const row = await db.prepare("SELECT notify_prefs FROM users WHERE id = ?").bind(recipient).first<{ notify_prefs: string }>();
+  if (!row || !parsePrefs(row.notify_prefs)[NOTIFICATION_PREF[type]]) return;
+  await db
+    .prepare("INSERT INTO notifications (id, user_id, actor_id, type, post_id, text, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)")
+    .bind(crypto.randomUUID(), recipient, actor, type, extras.postId ?? null, extras.text ?? "", isoNow())
+    .run();
+}
+
+/** True if either person has blocked the other. */
+export async function isBlocked(db: D1Database, a: string, b: string): Promise<boolean> {
+  const row = await db
+    .prepare("SELECT 1 FROM blocks WHERE (blocker_id = ? AND blocked_id = ?) OR (blocker_id = ? AND blocked_id = ?)")
+    .bind(a, b, b, a)
+    .first();
+  return row !== null;
 }
 
 function randomCode(length: number): string {
@@ -116,6 +186,11 @@ async function createUser(
     identity: "",
     friend_code: await uniqueFriendCode(db),
     created_at: isoNow(),
+    avatar_id: null,
+    location: "",
+    bio: "",
+    goal: "",
+    notify_prefs: "{}",
   };
   await db
     .prepare(
@@ -137,7 +212,7 @@ async function startSession(db: D1Database, user: UserRow) {
 }
 
 /** The signed-in user, from `Authorization: Bearer <token>`. */
-async function requireUser(request: Request, env: CommunityEnv): Promise<UserRow> {
+export async function requireUser(request: Request, env: CommunityEnv): Promise<UserRow> {
   const header = request.headers.get("authorization") ?? "";
   const token = header.startsWith("Bearer ") ? header.slice(7).trim() : "";
   if (!/^[0-9a-f]{64}$/.test(token)) throw new HttpError(401, "signed_out", "Please sign in again.");
@@ -150,7 +225,7 @@ async function requireUser(request: Request, env: CommunityEnv): Promise<UserRow
   return user;
 }
 
-async function areFriends(db: D1Database, a: string, b: string): Promise<boolean> {
+export async function areFriends(db: D1Database, a: string, b: string): Promise<boolean> {
   return (await db.prepare("SELECT 1 FROM friendships WHERE user_id = ? AND friend_id = ?").bind(a, b).first()) !== null;
 }
 
@@ -180,7 +255,7 @@ async function signUp(request: Request, env: CommunityEnv): Promise<Response> {
   const existing = await env.DB.prepare("SELECT 1 FROM users WHERE email = ?").bind(email).first();
   if (existing) throw new HttpError(409, "email_taken", "There's already an account with that email — log in instead.");
 
-  const user = await createUser(env.DB, { name, email, passwordHash: await hashPassword(password), appleSub: null });
+  const user = await createUser(env.DB, { name: filterText(name), email, passwordHash: await hashPassword(password), appleSub: null });
   return json(await startSession(env.DB, user));
 }
 
@@ -258,10 +333,43 @@ async function updateMe(request: Request, env: CommunityEnv): Promise<Response> 
     }
   }
 
-  await env.DB.prepare("UPDATE users SET name = ?, handle = ?, identity = ? WHERE id = ?")
-    .bind(name, handle, identity, user.id)
+  const location = body.location === undefined ? user.location : filterText(text(body.location, 60));
+  const bio = body.bio === undefined ? user.bio : filterText(text(body.bio, 160));
+  const goal = body.goal === undefined ? user.goal : filterText(text(body.goal, 80));
+
+  let avatarId = user.avatar_id;
+  if (body.avatar_id !== undefined) {
+    if (body.avatar_id === null) {
+      avatarId = null;
+    } else {
+      const candidate = text(body.avatar_id, 64);
+      const owned = await env.DB.prepare("SELECT 1 FROM images WHERE id = ? AND user_id = ?").bind(candidate, user.id).first();
+      if (!owned) throw new HttpError(400, "bad_request", "That photo didn't upload — try again.");
+      avatarId = candidate;
+    }
+  }
+
+  let prefs = user.notify_prefs;
+  if (body.notify_prefs !== undefined && typeof body.notify_prefs === "object" && body.notify_prefs !== null) {
+    const incoming = body.notify_prefs as Record<string, unknown>;
+    prefs = JSON.stringify(
+      Object.fromEntries(NOTIFY_KEYS.map((key) => [key, incoming[key] === undefined ? parsePrefs(user.notify_prefs)[key] : incoming[key] !== false])),
+    );
+  }
+
+  const cleanName = filterText(name);
+  const cleanIdentity = filterText(identity);
+  await env.DB.prepare(
+    "UPDATE users SET name = ?, handle = ?, identity = ?, location = ?, bio = ?, goal = ?, avatar_id = ?, notify_prefs = ? WHERE id = ?",
+  )
+    .bind(cleanName, handle, cleanIdentity, location, bio, goal, avatarId, prefs, user.id)
     .run();
-  return json({ user: me({ ...user, name, handle, identity }) });
+  if (user.avatar_id && user.avatar_id !== avatarId) {
+    await env.DB.prepare("DELETE FROM images WHERE id = ? AND user_id = ?").bind(user.avatar_id, user.id).run();
+  }
+  return json({
+    user: me({ ...user, name: cleanName, handle, identity: cleanIdentity, location, bio, goal, avatar_id: avatarId, notify_prefs: prefs }),
+  });
 }
 
 /** Required by the App Store for any app that creates accounts. Removes everything. */
@@ -269,6 +377,14 @@ async function deleteMe(request: Request, env: CommunityEnv): Promise<Response> 
   const user = await requireUser(request, env);
   const id = user.id;
   await env.DB.batch([
+    env.DB.prepare("DELETE FROM post_kudos WHERE user_id = ? OR post_id IN (SELECT id FROM posts WHERE user_id = ?)").bind(id, id),
+    env.DB.prepare("DELETE FROM comments WHERE user_id = ? OR post_id IN (SELECT id FROM posts WHERE user_id = ?)").bind(id, id),
+    env.DB.prepare("DELETE FROM notifications WHERE user_id = ? OR actor_id = ?").bind(id, id),
+    env.DB.prepare("DELETE FROM posts WHERE user_id = ?").bind(id),
+    env.DB.prepare("DELETE FROM images WHERE user_id = ?").bind(id),
+    env.DB.prepare("DELETE FROM messages WHERE from_id = ? OR to_id = ?").bind(id, id),
+    env.DB.prepare("DELETE FROM blocks WHERE blocker_id = ? OR blocked_id = ?").bind(id, id),
+    env.DB.prepare("DELETE FROM reports WHERE reporter_id = ?").bind(id),
     env.DB.prepare("DELETE FROM cheers WHERE user_id = ? OR event_id IN (SELECT id FROM events WHERE user_id = ?)").bind(id, id),
     env.DB.prepare("DELETE FROM events WHERE user_id = ?").bind(id),
     env.DB.prepare("DELETE FROM nudges WHERE from_id = ? OR to_id = ?").bind(id, id),
@@ -353,6 +469,9 @@ async function addFriend(request: Request, env: CommunityEnv): Promise<Response>
     .first<UserRow>();
   if (!target) throw new HttpError(404, "not_found", "No one with that code or handle — check it and try again.");
   if (target.id === user.id) throw new HttpError(400, "self", "That's you! Share your code with a friend instead.");
+  if (await isBlocked(env.DB, user.id, target.id)) {
+    throw new HttpError(404, "not_found", "No one with that code or handle — check it and try again.");
+  }
   if (await areFriends(env.DB, user.id, target.id)) {
     return json({ status: "friends", user: publicUser(target) });
   }
@@ -366,12 +485,14 @@ async function addFriend(request: Request, env: CommunityEnv): Promise<Response>
     .first();
   if (theirRequest) {
     await befriend(env.DB, user.id, target.id);
+    await notify(env.DB, target.id, user.id, "friend_accepted");
     return json({ status: "friends", user: publicUser(target) });
   }
 
-  await env.DB.prepare("INSERT OR IGNORE INTO friend_requests (from_id, to_id, created_at) VALUES (?, ?, ?)")
+  const inserted = await env.DB.prepare("INSERT OR IGNORE INTO friend_requests (from_id, to_id, created_at) VALUES (?, ?, ?)")
     .bind(user.id, target.id, isoNow())
     .run();
+  if (inserted.meta.changes > 0) await notify(env.DB, target.id, user.id, "friend_request");
   return json({ status: "requested", user: publicUser(target) });
 }
 
@@ -386,6 +507,7 @@ async function respondToFriend(request: Request, env: CommunityEnv): Promise<Res
 
   if (body.accept === true) {
     await befriend(env.DB, user.id, fromId);
+    await notify(env.DB, fromId, user.id, "friend_accepted");
   } else {
     await env.DB.prepare("DELETE FROM friend_requests WHERE from_id = ? AND to_id = ?").bind(fromId, user.id).run();
   }
@@ -443,7 +565,7 @@ async function getFeed(request: Request, env: CommunityEnv): Promise<Response> {
   const user = await requireUser(request, env);
   const since = isoNow(new Date(Date.now() - FEED_DAYS * 86_400_000));
   const events = await env.DB.prepare(
-    `SELECT e.id, e.user_id, e.kind, e.title, e.detail, e.streak, e.occurred_at, u.name, u.handle
+    `SELECT e.id, e.user_id, e.kind, e.title, e.detail, e.streak, e.occurred_at, u.name, u.handle, u.avatar_id
      FROM events e JOIN users u ON u.id = e.user_id
      WHERE (e.user_id = ?1 OR e.user_id IN (SELECT friend_id FROM friendships WHERE user_id = ?1))
        AND e.occurred_at >= ?2
@@ -460,6 +582,7 @@ async function getFeed(request: Request, env: CommunityEnv): Promise<Response> {
       occurred_at: string;
       name: string;
       handle: string;
+      avatar_id: string | null;
     }>();
 
   const cheers = await env.DB.prepare(
@@ -479,7 +602,7 @@ async function getFeed(request: Request, env: CommunityEnv): Promise<Response> {
       const eventCheers = cheersByEvent.get(event.id) ?? [];
       return {
         id: event.id,
-        user: { id: event.user_id, name: event.name, handle: event.handle },
+        user: { id: event.user_id, name: event.name, handle: event.handle, avatar_id: event.avatar_id },
         kind: event.kind,
         title: event.title,
         detail: event.detail,
@@ -514,6 +637,8 @@ async function cheer(request: Request, env: CommunityEnv): Promise<Response> {
   )
     .bind(eventId, user.id, emoji, isoNow())
     .run();
+  const title = await env.DB.prepare("SELECT title FROM events WHERE id = ?").bind(eventId).first<{ title: string }>();
+  await notify(env.DB, event.user_id, user.id, "cheer", { text: `${emoji} ${title?.title ?? ""}`.trim() });
   return json({ ok: true });
 }
 
@@ -536,6 +661,7 @@ async function sendNudge(request: Request, env: CommunityEnv): Promise<Response>
   if (result.meta.changes === 0) {
     throw new HttpError(409, "already_nudged", "You've already nudged them today — one's enough.");
   }
+  await notify(env.DB, to, user.id, "nudge", { text: NUDGES[kind] });
   return json({ ok: true });
 }
 
@@ -543,15 +669,15 @@ async function listNudges(request: Request, env: CommunityEnv): Promise<Response
   const user = await requireUser(request, env);
   const since = isoNow(new Date(Date.now() - 7 * 86_400_000));
   const nudges = await env.DB.prepare(
-    `SELECT n.id, n.kind, n.created_at, u.id AS from_id, u.name, u.handle FROM nudges n JOIN users u ON u.id = n.from_id
+    `SELECT n.id, n.kind, n.created_at, u.id AS from_id, u.name, u.handle, u.avatar_id FROM nudges n JOIN users u ON u.id = n.from_id
      WHERE n.to_id = ? AND n.seen_at IS NULL AND n.created_at >= ? ORDER BY n.created_at DESC LIMIT 20`,
   )
     .bind(user.id, since)
-    .all<{ id: string; kind: string; created_at: string; from_id: string; name: string; handle: string }>();
+    .all<{ id: string; kind: string; created_at: string; from_id: string; name: string; handle: string; avatar_id: string | null }>();
   return json({
     nudges: nudges.results.map((n) => ({
       id: n.id,
-      from: { id: n.from_id, name: n.name, handle: n.handle },
+      from: { id: n.from_id, name: n.name, handle: n.handle, avatar_id: n.avatar_id },
       kind: n.kind,
       message: NUDGES[n.kind] ?? "",
       created_at: n.created_at,
@@ -573,14 +699,15 @@ async function markNudgesSeen(request: Request, env: CommunityEnv): Promise<Resp
 
 // MARK: - Routes
 
-type Handler = (request: Request, env: CommunityEnv) => Promise<Response>;
+export type Params = Record<string, string>;
+export type Handler = (request: Request, env: CommunityEnv, params: Params) => Promise<Response>;
 
 export function communityRoutes(fetchKeys: JwksFetcher = fetchAppleKeys): Record<string, Handler> {
   const withSchema =
     (handler: Handler): Handler =>
-    async (request, env) => {
+    async (request, env, params) => {
       await ensureSchema(env.DB);
-      return handler(request, env);
+      return handler(request, env, params);
     };
   return {
     "POST /v1/auth/signup": withSchema(signUp),

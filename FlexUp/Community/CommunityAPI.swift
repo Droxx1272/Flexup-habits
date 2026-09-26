@@ -40,9 +40,18 @@ struct CommunityAPI {
         return try await send(request)
     }
 
-    private func send<T: Decodable>(_ request: URLRequest) async throws -> T {
+    /// Raw upload (photos). Returns the server's JSON reply.
+    func upload<T: Decodable>(_ path: String, data: Data, contentType: String) async throws -> T {
+        var request = URLRequest(url: baseURL.appendingPathComponent(path))
+        request.httpMethod = "POST"
+        request.setValue(contentType, forHTTPHeaderField: "Content-Type")
+        request.httpBody = data
+        return try await send(request, timeout: 60)
+    }
+
+    private func send<T: Decodable>(_ request: URLRequest, timeout: TimeInterval = 20) async throws -> T {
         var request = request
-        request.timeoutInterval = 20
+        request.timeoutInterval = timeout
         if let token {
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         }
@@ -88,4 +97,44 @@ struct NudgesResponse: Decodable {
 
 struct OKResponse: Decodable {
     let ok: Bool
+}
+
+struct PostsResponse: Decodable {
+    let posts: [Post]
+}
+
+struct PostResponse: Decodable {
+    let post: Post
+}
+
+struct CommentsResponse: Decodable {
+    let comments: [PostComment]
+}
+
+struct NotificationsResponse: Decodable {
+    let notifications: [AppNotification]
+}
+
+struct ThreadsResponse: Decodable {
+    let threads: [MessageThread]
+}
+
+struct MessagesResponse: Decodable {
+    let messages: [DirectMessage]
+}
+
+struct MessageResponse: Decodable {
+    let message: DirectMessage
+}
+
+struct ProfileResponse: Decodable {
+    let profile: CommunityProfile
+}
+
+struct UsersResponse: Decodable {
+    let users: [CommunityUser]
+}
+
+struct ImageResponse: Decodable {
+    let id: String
 }

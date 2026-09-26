@@ -31,6 +31,9 @@ final class AppStore {
     var hasSeenIntro = false
     /// Which pillars friends see in their feed.
     var sharing = SharingSettings()
+    /// Outcomes and weekly targets, asked right after sign-up.
+    var goals = UserGoals()
+    var reminders = ReminderPreferences()
 
     /// Friends, cheers and nudges — the part of the app that lives on the
     /// FlexUp server. Reached as `store.community` so state still has one home.
@@ -91,6 +94,47 @@ final class AppStore {
     func updateSharing(_ settings: SharingSettings) {
         sharing = settings
         save()
+    }
+
+    func updateGoals(_ newGoals: UserGoals) {
+        goals = newGoals
+        save()
+    }
+
+    func updateReminders(_ preferences: ReminderPreferences) {
+        reminders = preferences
+        save()
+        updateHabitReminders()
+    }
+
+    func setWakeAlarm(_ enabled: Bool) {
+        wake.enabled = enabled
+        updateWakeSchedule()
+        save()
+    }
+
+    func setBedtimeReminder(_ enabled: Bool) {
+        bedtime.enabled = enabled
+        updateBedtimeSchedule()
+    }
+
+    /// This calendar week against the weekly targets from onboarding.
+    var weekProgress: (runs: Int, workouts: Int, wakeUps: Int, wakeDays: Int) {
+        guard let week = calendar.dateInterval(of: .weekOfYear, for: .now) else { return (0, 0, 0, 0) }
+        let runsThisWeek = runs.filter { week.contains($0.date) }.count
+        let workoutsThisWeek = workouts.filter { week.contains($0.date) }.count
+        var wakeUps = 0
+        var scheduled = 0
+        var day = week.start
+        while day < week.end {
+            if wake.days.contains(calendar.component(.weekday, from: day)) {
+                scheduled += 1
+                if wakeCheckInDays.contains(dayKey(day)) { wakeUps += 1 }
+            }
+            guard let next = calendar.date(byAdding: .day, value: 1, to: day) else { break }
+            day = next
+        }
+        return (runsThisWeek, workoutsThisWeek, wakeUps, scheduled)
     }
 
     /// Hand a real, just-logged activity to friends, if that pillar is shared.
@@ -230,11 +274,12 @@ final class AppStore {
     func updateHabitReminders() {
         let center = UNUserNotificationCenter.current()
         let habitsSnapshot = habits
+        let remindersOn = reminders.habitReminders
 
         center.getPendingNotificationRequests { requests in
             let stale = requests.map(\.identifier).filter { $0.hasPrefix("habit-") }
             center.removePendingNotificationRequests(withIdentifiers: stale)
-            guard !habitsSnapshot.isEmpty else { return }
+            guard remindersOn, !habitsSnapshot.isEmpty else { return }
 
             center.requestAuthorization(options: [.alert, .sound]) { granted, _ in
                 guard granted else { return }
@@ -1653,6 +1698,8 @@ final class AppStore {
         var waterByDay: [String: Int]?
         var hasSeenIntro: Bool?
         var sharing: SharingSettings?
+        var goals: UserGoals?
+        var reminders: ReminderPreferences?
         var moodByDay: [String: String]
         var chats: [UUID: [ChatMessage]]
     }
@@ -1696,6 +1743,8 @@ final class AppStore {
             waterByDay: waterByDay,
             hasSeenIntro: hasSeenIntro,
             sharing: sharing,
+            goals: goals,
+            reminders: reminders,
             moodByDay: moodByDay,
             chats: chats
         )
@@ -1737,6 +1786,8 @@ final class AppStore {
         // Anyone who already signed in before the intro existed has seen enough.
         hasSeenIntro = snapshot.hasSeenIntro ?? (snapshot.account != nil)
         sharing = snapshot.sharing ?? SharingSettings()
+        goals = snapshot.goals ?? UserGoals()
+        reminders = snapshot.reminders ?? ReminderPreferences()
         cuisineContext = snapshot.cuisineContext ?? ""
         wake = snapshot.wake ?? WakeConfig()
         wakeCheckInDays = snapshot.wakeCheckInDays ?? []

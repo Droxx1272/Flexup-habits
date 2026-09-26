@@ -2,11 +2,11 @@ import SwiftUI
 
 /// Where the core loop closes. Habits materialize commitments onto each
 /// day; this is the screen where you see them, do them, and check them off.
-/// Friends, Progress (every pillar over time) and Stats live one segment away.
+/// Community (your crew's feed), Progress and Stats live one segment away.
 struct TodayView: View {
     enum Section: String, CaseIterable, Identifiable {
         case today = "Today"
-        case friends = "Friends"
+        case community = "Community"
         case progress = "Progress"
         case stats = "Stats"
         var id: String { rawValue }
@@ -38,11 +38,12 @@ struct TodayView: View {
                     switch section {
                     case .today:
                         progressCard
+                        weekCard
                         crewBanner
                         commitmentsSection
                         planRow
-                    case .friends:
-                        FriendsSection()
+                    case .community:
+                        CommunitySection()
                     case .progress:
                         ProgressSection()
                     case .stats:
@@ -58,6 +59,7 @@ struct TodayView: View {
             .refreshable {
                 await store.community.refresh(day: store.todayKey)
             }
+            .communityDestinations()
             .task {
                 await store.community.refresh(day: store.todayKey)
             }
@@ -107,6 +109,46 @@ struct TodayView: View {
         return "\(done) of \(total) done — keep the thread going."
     }
 
+    // MARK: This week vs goals
+
+    /// The weekly targets from onboarding, measured by what was actually logged.
+    private var weekCard: some View {
+        let week = store.weekProgress
+        return FlexCard(padding: 16) {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("THIS WEEK")
+                    .font(.flexMono(10))
+                    .tracking(2)
+                    .foregroundStyle(Theme.inkSubtle)
+                HStack(spacing: 10) {
+                    weekStat("Wake-ups", done: week.wakeUps, target: week.wakeDays, icon: "sunrise.fill")
+                    weekStat("Runs", done: week.runs, target: store.goals.runsPerWeek, icon: "figure.run")
+                    weekStat("Sessions", done: week.workouts, target: store.goals.gymPerWeek, icon: "dumbbell.fill")
+                }
+            }
+        }
+    }
+
+    private func weekStat(_ label: String, done: Int, target: Int, icon: String) -> some View {
+        let met = target > 0 && done >= target
+        return VStack(spacing: 6) {
+            Image(systemName: met ? "checkmark.circle.fill" : icon)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(met ? Theme.accent : Theme.inkSubtle)
+            Text(target > 0 ? "\(done)/\(target)" : "\(done)")
+                .font(.flexStat(22))
+                .foregroundStyle(Theme.ink)
+            Text(label.uppercased())
+                .font(.flexMono(8))
+                .tracking(1.2)
+                .foregroundStyle(Theme.inkSubtle)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 10)
+        .background(met ? Theme.accentSoft : Theme.background)
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+    }
+
     // MARK: Crew
 
     /// Nudges from friends surface where the day's work is, not buried a tab away.
@@ -115,7 +157,7 @@ struct TodayView: View {
         let nudges = store.community.nudges
         if let first = nudges.first {
             Button {
-                withAnimation(.spring(duration: 0.25)) { section = .friends }
+                withAnimation(.spring(duration: 0.25)) { section = .community }
             } label: {
                 HStack(spacing: 12) {
                     AvatarCircle(name: first.from.name, size: 34)

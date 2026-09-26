@@ -186,12 +186,22 @@ struct AvatarStack: View {
 struct ScreenHeader: View {
     let title: String
     let tagline: String
+    /// Messages, notifications and your profile photo, top right.
+    var showsActions = true
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(title.uppercased())
-                .font(.flexDisplay(40))
-                .foregroundStyle(Theme.ink)
+            HStack(alignment: .center, spacing: 8) {
+                Text(title.uppercased())
+                    .font(.flexDisplay(40))
+                    .foregroundStyle(Theme.ink)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
+                Spacer(minLength: 8)
+                if showsActions {
+                    HeaderActions()
+                }
+            }
             HStack(spacing: 8) {
                 RoundedRectangle(cornerRadius: 2)
                     .fill(Theme.accent)

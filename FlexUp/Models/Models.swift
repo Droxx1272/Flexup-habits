@@ -750,6 +750,53 @@ struct PersonalRecord: Identifiable, Hashable {
     var id: String { exercise }
 }
 
+// MARK: - Goals & preferences (asked right after sign-up)
+
+/// What someone wants out of FlexUp, in outcomes rather than activities.
+enum GoalFocus: String, Codable, CaseIterable, Identifiable {
+    case loseFat, buildMuscle, runFarther, sleepBetter, wakeEarlier, eatBetter, beConsistent
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .loseFat: "Lose fat"
+        case .buildMuscle: "Build muscle"
+        case .runFarther: "Run farther"
+        case .sleepBetter: "Sleep better"
+        case .wakeEarlier: "Wake up earlier"
+        case .eatBetter: "Eat better"
+        case .beConsistent: "Be consistent"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .loseFat: "flame"
+        case .buildMuscle: "dumbbell"
+        case .runFarther: "figure.run"
+        case .sleepBetter: "moon.zzz"
+        case .wakeEarlier: "sunrise"
+        case .eatBetter: "leaf"
+        case .beConsistent: "checkmark.seal"
+        }
+    }
+}
+
+/// Weekly targets. The Today screen measures the week against these.
+struct UserGoals: Codable, Hashable {
+    var focuses: [GoalFocus] = []
+    var runsPerWeek = 2
+    var gymPerWeek = 3
+    var currentWeightKg: Double?
+    var targetWeightKg: Double?
+}
+
+/// Local reminder switches. Wake alarm and bedtime keep their own configs.
+struct ReminderPreferences: Codable, Hashable {
+    var habitReminders = true
+}
+
 struct DayStat: Identifiable {
     var id = UUID()
     var label: String

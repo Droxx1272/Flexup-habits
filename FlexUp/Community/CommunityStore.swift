@@ -10,11 +10,20 @@ import Observation
 @Observable
 final class CommunityStore {
     private(set) var me: CommunityMe?
-    private(set) var friends: [FriendStatus] = []
+    // Settable app-wide only so the social extension (another file) can
+    // update them; views still go through methods.
+    var friends: [FriendStatus] = []
     private(set) var incoming: [CommunityUser] = []
     private(set) var outgoing: [CommunityUser] = []
-    private(set) var feed: [FeedEvent] = []
+    var feed: [FeedEvent] = []
     private(set) var nudges: [Nudge] = []
+    /// Posts from you and your friends, newest first.
+    var posts: [Post] = []
+    var hasMorePosts = false
+    var notifications: [AppNotification] = []
+    var threads: [MessageThread] = []
+    /// Counts for the header's chat, bell and friend-request badges.
+    var badges = Badges()
     private(set) var isRefreshing = false
     private(set) var hasLoaded = false
     /// Last thing that went wrong, in plain words. Views show and clear it.
@@ -41,11 +50,11 @@ final class CommunityStore {
         return saved
     }
 
-    private var api: CommunityAPI? {
+    var api: CommunityAPI? {
         BackendConfig.baseURL.map { CommunityAPI(baseURL: $0, token: token) }
     }
 
-    private func requireAPI() throws -> CommunityAPI {
+    func requireAPI() throws -> CommunityAPI {
         guard let api else {
             throw ServerError(status: 0, type: "not_configured", message: "Friends need the FlexUp server, which isn't connected yet.")
         }
@@ -115,6 +124,11 @@ final class CommunityStore {
         outgoing = []
         feed = []
         nudges = []
+        posts = []
+        hasMorePosts = false
+        notifications = []
+        threads = []
+        badges = Badges()
         hasLoaded = false
         pending = []
         savePending()
@@ -122,9 +136,13 @@ final class CommunityStore {
 
     @MainActor
     func updateProfile(name: String, handle: String, identity: String) async throws {
-        let response: MeResponse = try await requireAPI().post("v1/me", [
-            "name": name, "handle": handle, "identity": identity,
-        ])
+        try await updateProfile(["name": name, "handle": handle, "identity": identity])
+    }
+
+    /// Any of: name, handle, identity, location, bio, goal, avatar_id, notify_prefs.
+    @MainActor
+    func updateProfile(_ fields: [String: Any]) async throws {
+        let response: MeResponse = try await requireAPI().post("v1/me", fields)
         me = response.user
     }
 
@@ -143,8 +161,14 @@ final class CommunityStore {
             async let friendsResponse: FriendsResponse = api.get("v1/friends", query: ["day": day])
             async let feedResponse: FeedResponse = api.get("v1/feed")
             async let nudgesResponse: NudgesResponse = api.get("v1/nudges")
+            async let postsResponse: PostsResponse = api.get("v1/posts")
+            async let badgesResponse: Badges = api.get("v1/badges")
             let (meValue, friendsValue, feedValue, nudgesValue) = try await (meResponse, friendsResponse, feedResponse, nudgesResponse)
+            let (postsValue, badgesValue) = try await (postsResponse, badgesResponse)
             me = meValue.user
+            posts = postsValue.posts
+            hasMorePosts = postsValue.posts.count >= 30
+            badges = badgesValue
             friends = friendsValue.friends
             incoming = friendsValue.incoming
             outgoing = friendsValue.outgoing
@@ -157,7 +181,7 @@ final class CommunityStore {
     }
 
     @MainActor
-    private func handle(_ error: Error) {
+    func handle(_ error: Error) {
         if let serverError = error as? ServerError, serverError.type == "signed_out" {
             clearSession()
             errorMessage = "You were signed out of FlexUp friends — sign in again."

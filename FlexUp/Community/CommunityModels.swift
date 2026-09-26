@@ -10,6 +10,18 @@ struct CommunityUser: Codable, Hashable, Identifiable {
     let handle: String
     /// "Becoming …" line. Absent where the server sends a compact user.
     let identity: String?
+    /// Profile photo, served at `/v1/images/<id>`.
+    let avatarId: String?
+    let location: String?
+
+    init(id: String, name: String, handle: String, identity: String? = nil, avatarId: String? = nil, location: String? = nil) {
+        self.id = id
+        self.name = name
+        self.handle = handle
+        self.identity = identity
+        self.avatarId = avatarId
+        self.location = location
+    }
 }
 
 /// The signed-in person, as the server knows them.
@@ -21,6 +33,24 @@ struct CommunityMe: Codable, Hashable {
     let email: String?
     let friendCode: String
     let hasApple: Bool
+    let avatarId: String?
+    let location: String
+    let bio: String
+    let goal: String
+    let notifyPrefs: NotifyPrefs
+
+    var asUser: CommunityUser {
+        CommunityUser(id: id, name: name, handle: handle, identity: identity, avatarId: avatarId, location: location)
+    }
+}
+
+/// Which friend activity lands in your notification bell.
+struct NotifyPrefs: Codable, Hashable {
+    var friends = true
+    var nudges = true
+    var cheers = true
+    var comments = true
+    var messages = true
 }
 
 /// A friend plus what they've done today — the accountability row.
@@ -143,4 +173,102 @@ struct PendingActivity: Codable, Hashable {
     var day: String
     var occurredAt: Date
     var streak: Int?
+}
+
+// MARK: - Posts, comments, messages, notifications, profiles
+
+struct Post: Codable, Hashable, Identifiable {
+    let id: String
+    let user: CommunityUser
+    let text: String
+    let imageId: String?
+    let createdAt: Date
+    let isMine: Bool
+    var kudos: [CommunityUser]
+    var gaveKudos: Bool
+    var commentCount: Int
+}
+
+struct PostComment: Codable, Hashable, Identifiable {
+    let id: String
+    let text: String
+    let createdAt: Date
+    let user: CommunityUser
+    let canDelete: Bool
+}
+
+struct AppNotification: Codable, Hashable, Identifiable {
+    let id: String
+    let type: String
+    let postId: String?
+    let text: String
+    let createdAt: Date
+    let isRead: Bool
+    let actor: CommunityUser
+
+    /// One line, written the way a friend would say it.
+    var sentence: String {
+        switch type {
+        case "friend_request": "\(actor.name) wants to be accountability partners"
+        case "friend_accepted": "\(actor.name) accepted — you're now in each other's crew"
+        case "nudge": "\(actor.name) nudged you: \(text)"
+        case "cheer": "\(actor.name) cheered \(text)"
+        case "kudos": text.isEmpty ? "\(actor.name) gave you kudos" : "\(actor.name) gave kudos to “\(text)”"
+        case "comment": "\(actor.name) commented: “\(text)”"
+        default: "\(actor.name) \(text)"
+        }
+    }
+
+    var icon: String {
+        switch type {
+        case "friend_request", "friend_accepted": "person.badge.plus"
+        case "nudge": "hand.wave.fill"
+        case "cheer": "flame.fill"
+        case "kudos": "hand.thumbsup.fill"
+        case "comment": "text.bubble.fill"
+        default: "bell.fill"
+        }
+    }
+}
+
+struct MessageThread: Codable, Hashable, Identifiable {
+    let user: CommunityUser
+    let lastText: String?
+    let lastAt: Date?
+    let lastFromMe: Bool
+    var unread: Int
+
+    var id: String { user.id }
+}
+
+struct DirectMessage: Codable, Hashable, Identifiable {
+    let id: String
+    let text: String
+    let createdAt: Date
+    let fromMe: Bool
+}
+
+struct CommunityProfile: Codable, Hashable {
+    let user: CommunityUser
+    let bio: String
+    let goal: String
+    let joinedAt: Date
+    /// "self", "friend", "incoming" (they asked you) or "outgoing" (you asked them).
+    let relationship: String
+    /// This month's shared activity counts, keyed by `ActivityKind` raw value.
+    let month: [String: Int]
+    let wakeStreak: Int?
+}
+
+struct Badges: Codable, Hashable {
+    var notifications = 0
+    var messages = 0
+    var requests = 0
+}
+
+enum ReportReason: String, CaseIterable, Identifiable {
+    case spam, harassment, hate, nudity, violence, other
+
+    var id: String { rawValue }
+    var label: String { rawValue.capitalized }
 }

@@ -27,9 +27,12 @@ struct RootView: View {
     }
 }
 
-/// One tab per pillar, plus Today (commitments, progress, stats). Everything else (Discover, Squad,
-/// Calendar, coach) stays in the codebase for later — the nav stays simple.
+/// One tab per pillar, plus Today (commitments, community, progress, stats).
+/// Everything else (Discover, Squad, Calendar, coach) stays in the codebase
+/// for later — the nav stays simple.
 struct MainTabView: View {
+    @Environment(AppStore.self) private var store
+
     var body: some View {
         TabView {
             WakeView()
@@ -44,6 +47,13 @@ struct MainTabView: View {
                 .tabItem { Label("Today", systemImage: "checklist") }
         }
         .tint(Theme.accent)
+        // Keeps the header's chat / bell counts current while the app is open.
+        .task(id: store.community.isSignedIn) {
+            while store.community.isSignedIn && !Task.isCancelled {
+                await store.community.refreshBadges()
+                try? await Task.sleep(for: .seconds(60))
+            }
+        }
     }
 }
 

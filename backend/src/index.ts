@@ -1,9 +1,10 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { AppAttestError, base64Decode, base64Encode, concat, utf8, verifyAssertion, verifyAttestation } from "./appattest";
 import { CHALLENGE_TTL_SECONDS, checkChallenge, issueChallenge } from "./challenge";
-import { communityRoutes, type CommunityEnv } from "./community";
+import { communityRoutes, type CommunityEnv, type Params } from "./community";
 import { EstimateMalformedError, EstimateRefusedError, estimateMeal, type ImageMediaType } from "./estimate";
 import { HttpError, fail, json, parseJson, readBody as readLimitedBody } from "./http";
+import { socialRoutes } from "./social";
 
 /**
  * FlexUp API. Turns a meal photo into an itemised estimate without the
@@ -246,15 +247,43 @@ async function handleEstimate(request: Request, env: Env): Promise<Response> {
 
 // MARK: - Router
 
-type Handler = (request: Request, env: Env) => Promise<Response>;
+type Handler = (request: Request, env: Env, params: Params) => Promise<Response>;
 
-const routes: Record<string, Handler> = {
+const routeTable: Record<string, Handler> = {
   "POST /v1/attest/challenge": handleChallenge,
   "POST /v1/attest/register": handleRegister,
   "POST /v1/estimate": handleEstimate,
   ...communityRoutes(),
+  ...socialRoutes(),
 };
-const paths = new Set(Object.keys(routes).map((route) => route.split(" ")[1]));
+
+/** "METHOD /path/:param" routes, matched segment by segment. */
+const routes = Object.entries(routeTable).map(([key, handler]) => {
+  const [method, pattern] = key.split(" ");
+  return { method, segments: pattern.split("/").filter(Boolean), handler };
+});
+
+function match(method: string, pathname: string): { handler?: Handler; params: Params; pathExists: boolean } {
+  const parts = pathname.split("/").filter(Boolean);
+  let pathExists = false;
+  for (const route of routes) {
+    if (route.segments.length !== parts.length) continue;
+    const params: Params = {};
+    const ok = route.segments.every((segment, index) => {
+      if (segment.startsWith(":")) {
+        const value = decodeURIComponent(parts[index]);
+        if (!/^[A-Za-z0-9-]{1,64}$/.test(value)) return false;
+        params[segment.slice(1)] = value;
+        return true;
+      }
+      return segment === parts[index];
+    });
+    if (!ok) continue;
+    pathExists = true;
+    if (route.method === method) return { handler: route.handler, params, pathExists };
+  }
+  return { params: {}, pathExists };
+}
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
@@ -264,15 +293,13 @@ export default {
       return json({ ok: true, attestation: attestationOn(env) ? "required" : "off" });
     }
 
-    const handler = routes[`${request.method} ${pathname}`];
+    const { handler, params, pathExists } = match(request.method, pathname);
     if (!handler) {
-      return paths.has(pathname)
-        ? fail(405, "method_not_allowed", "Wrong method.")
-        : fail(404, "not_found", "Not found.");
+      return pathExists ? fail(405, "method_not_allowed", "Wrong method.") : fail(404, "not_found", "Not found.");
     }
 
     try {
-      return await handler(request, env);
+      return await handler(request, env, params);
     } catch (error) {
       if (error instanceof HttpError) return fail(error.status, error.type, error.message);
       console.error("Unexpected", error);

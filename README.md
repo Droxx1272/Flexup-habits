@@ -41,7 +41,20 @@ Four pillars plus the proof — one tab each, nothing buried:
 | **Diet** | Nutrition (Lose It-style, more data): step back through any day to review or back-fill it; calorie budget ring and logging streak; **macros** (protein / carbs / fat bars against goals, energy-split donut, fibre / sugar / sodium) with an honest note when some calories have no macro data; water tracker (+250 / +500 ml against a daily goal); last-7-days calorie chart against budget; tap any food for its full breakdown and "log again"; recent foods and 16 quick-adds with macros; nutrition goals (Lose / Maintain / Build split, protein from body weight, fibre, water); body-weight logging; and photo estimation built for real plates — see below. |
 | **Today** | Where the loop closes, with a **Today / Progress / Stats** toggle. **Today**: progress ring, the day's commitments (tap to run a timer, take photo proof, complete, reschedule or skip), plan a one-off, and Quick Start. **Progress**: every pillar over 7D / 30D / 90D / 1Y — follow-through rate, a square-per-morning wake grid, sleep hours vs 8h, km per day/week, gym volume with personal records, calories vs budget with average macros and water, body weight and photo count. Unlogged days are gaps, never zeros. **Stats**: per-pillar streaks and totals, weekly consistency chart, habit management, body-weight trend, progress photos with pose guides and then-vs-now comparison, achievements, account. |
 
-**Friends** (Today tab → Friends): real accounts on the FlexUp server, a 6-character friend code (share it, or add someone by code/@handle), requests to accept, and a crew list showing who's already shown up today — with one preset **nudge** per friend per day for anyone who's quiet. A friends-only feed of the last two weeks shows what people actually logged (wake-ups, runs, workouts, habits — sleep optional, food never), each with one-tap **cheers**. Nudges also surface as a banner on Today. No strangers, no public profiles, no follower counts; removing a friend works as a block, and accounts can be deleted in-app.
+**Community.** It needs the FlexUp server and lives in three places:
+
+- **The header on every tab:** messages, a notification bell with counts, and your profile photo.
+- **Today → Community**, a Strava-style feed for your crew only:
+  - A row of friends' profile photos, ringed when they've shown up today; long-press one to **nudge** them (once per friend per day).
+  - A composer for **posts** with text and a photo.
+  - One feed mixing posts (with **kudos** and **comments**) and logged activity (wake-ups, runs, workouts and habits, with one-tap **cheers**).
+- **Profiles:** photo with a camera badge, name, @handle, city, "becoming…", current goal, bio, this month's activity, and posts. Your own profile has Edit plus links to your crew (friend code, invite, requests), what you share, notification settings, and blocked people.
+
+Also included:
+
+- **Messages:** 1:1 chat with friends.
+- **The bell:** friend requests, accepts, nudges, cheers, kudos and comments, each type switchable.
+- **Safety:** friends only, no strangers, no follower counts. Report and Block are on every post, comment, message and profile, there's a word filter, guidelines are agreed at sign-up, and accounts can be deleted in-app.
 
 Everything logged can be removed — long-press any run, workout, night, weigh-in, routine, or habit to delete it.
 
@@ -62,7 +75,17 @@ Discover, Squad (social feed + memories), Calendar, Activity detail, and the coa
 
 - A five-page **introduction** runs once before sign-in (the loop, then Wake, Run + Gym, Diet, Progress), each with an animated ink illustration; Skip or swipe through. Replayable from Stats.
 - With the FlexUp server connected, accounts are real: **Sign in with Apple** (requires the capability + a paid Apple Developer account) or **email + password**, the same account friends add. Without a server it falls back to an on-device account so early builds still work. Sign-out and account deletion live in Stats. Logs stay on the phone; only what you choose to share with friends goes to the server.
-- Onboarding is one question per screen (progress bar, back arrow, big type): name → identity → focus areas → starter habits → wake-up time, so day one starts tomorrow morning.
+- Sign up and log in are full pages from the front door (email + password with guidelines agreement, or Sign in with Apple).
+- Onboarding is one question per screen (progress bar, back arrow, big type):
+  - name → identity
+  - **goals** (lose fat, build muscle, run farther, sleep better, wake earlier, eat better, be consistent)
+  - activities → starter habits
+  - **weekly targets** (runs and gym sessions a week, eating to lose / maintain / build, weight now and target)
+  - wake-up time
+  - **notification preferences** (habit and bedtime reminders, and which crew notifications to get)
+  - with an account: **profile photo and city**
+
+  Goals drive a "This week" card on Today (wake-ups, runs and sessions against target) and the Diet macro split.
 
 ## Architecture
 
