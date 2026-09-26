@@ -8,6 +8,7 @@ struct MyProfileView: View {
     @Environment(AppStore.self) private var store
     @Environment(\.dismiss) private var dismiss
     @State private var showEdit = false
+    @State private var confirmLogOut = false
 
     private var usesServerProfile: Bool {
         FeatureFlags.community && store.community.me != nil && store.community.isSignedIn
@@ -44,40 +45,12 @@ struct MyProfileView: View {
 
                         VStack(spacing: 0) {
                             NavigationLink(value: CommunityDestination.notificationSettings) {
-                                HStack(spacing: 14) {
-                                    Image(systemName: "bell.badge")
-                                        .font(.system(size: 15, weight: .semibold))
-                                        .foregroundStyle(Theme.accent)
-                                        .frame(width: 22)
-                                    Text("Notifications & reminders")
-                                        .font(.flexBody())
-                                        .foregroundStyle(Theme.ink)
-                                    Spacer()
-                                    Image(systemName: "chevron.right")
-                                        .font(.system(size: 11, weight: .bold))
-                                        .foregroundStyle(Theme.inkSubtle)
-                                }
-                                .padding(14)
-                                .contentShape(Rectangle())
+                                settingsRow("Notifications and reminders", icon: "bell.badge")
                             }
                             .buttonStyle(.plain)
                             Divider().padding(.leading, 50)
                             NavigationLink(value: CommunityDestination.privacy) {
-                                HStack(spacing: 14) {
-                                    Image(systemName: "hand.raised")
-                                        .font(.system(size: 15, weight: .semibold))
-                                        .foregroundStyle(Theme.accent)
-                                        .frame(width: 22)
-                                    Text("Privacy & data")
-                                        .font(.flexBody())
-                                        .foregroundStyle(Theme.ink)
-                                    Spacer()
-                                    Image(systemName: "chevron.right")
-                                        .font(.system(size: 11, weight: .bold))
-                                        .foregroundStyle(Theme.inkSubtle)
-                                }
-                                .padding(14)
-                                .contentShape(Rectangle())
+                                settingsRow("Privacy and data", icon: "hand.raised")
                             }
                             .buttonStyle(.plain)
                         }
@@ -86,8 +59,16 @@ struct MyProfileView: View {
 
                         if FeatureFlags.community {
                             CommunityGateView()
-                        } else {
-                            ComingSoonCommunity()
+                        }
+
+                        if store.isSignedIn {
+                            Button {
+                                confirmLogOut = true
+                            } label: {
+                                Label("Log out", systemImage: "rectangle.portrait.and.arrow.right")
+                            }
+                            .buttonStyle(SecondaryButtonStyle(tint: Theme.danger))
+                            .padding(.top, 6)
                         }
                     }
                     .padding(20)
@@ -111,11 +92,38 @@ struct MyProfileView: View {
         .sheet(isPresented: $showEdit) {
             LocalProfileEditSheet()
         }
+        .confirmationDialog("Log out of FlexUp?", isPresented: $confirmLogOut, titleVisibility: .visible) {
+            Button("Log out", role: .destructive) {
+                dismiss()
+                store.signOut()
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Your logs stay on this phone and come back when you log in again.")
+        }
         .task {
             if FeatureFlags.community && store.community.isSignedIn && store.community.me == nil {
                 await store.community.refresh(day: store.todayKey)
             }
         }
+    }
+
+    private func settingsRow(_ title: String, icon: String) -> some View {
+        HStack(spacing: 14) {
+            Image(systemName: icon)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(Theme.accent)
+                .frame(width: 22)
+            Text(title)
+                .font(.flexBody())
+                .foregroundStyle(Theme.ink)
+            Spacer()
+            Image(systemName: "chevron.right")
+                .font(.system(size: 11, weight: .bold))
+                .foregroundStyle(Theme.inkSubtle)
+        }
+        .padding(14)
+        .contentShape(Rectangle())
     }
 
     /// Goals from onboarding and how this week is going against them.
@@ -359,7 +367,7 @@ struct MemberProfileView: View {
         if let profile, profile.relationship == "self" || profile.relationship == "friend" {
             VStack(spacing: 8) {
                 HStack(spacing: 8) {
-                    TrackStat(value: profile.wakeStreak.map { "\($0)" } ?? "—", label: "Wake streak")
+                    TrackStat(value: profile.wakeStreak.map { "\($0)" } ?? "-", label: "Wake streak")
                     TrackStat(value: "\(profile.month["run"] ?? 0)", label: "Runs")
                     TrackStat(value: "\(profile.month["workout"] ?? 0)", label: "Sessions")
                 }
@@ -416,7 +424,7 @@ struct MemberProfileView: View {
                 .buttonStyle(SecondaryButtonStyle())
             }
         case "outgoing":
-            Text("REQUEST SENT — WAITING ON \(user.name.uppercased())")
+            Text("REQUEST SENT · WAITING ON \(user.name.uppercased())")
                 .font(.flexMono(10))
                 .tracking(1)
                 .foregroundStyle(Theme.inkSubtle)

@@ -211,7 +211,7 @@ struct StatsSection: View {
                         }
                     }
                     Spacer()
-                    Button("Sign out") {
+                    Button("Log out") {
                         confirmSignOut = true
                     }
                     .font(.flexCaption())
@@ -246,13 +246,13 @@ struct StatsSection: View {
                 }
             }
         }
-        .confirmationDialog("Sign out of FlexUp?", isPresented: $confirmSignOut, titleVisibility: .visible) {
-            Button("Sign out", role: .destructive) {
+        .confirmationDialog("Log out of FlexUp?", isPresented: $confirmSignOut, titleVisibility: .visible) {
+            Button("Log out", role: .destructive) {
                 store.signOut()
             }
-            Button("Stay signed in", role: .cancel) {}
+            Button("Cancel", role: .cancel) {}
         } message: {
-            Text("Your data stays on this device and is here when you sign back in.")
+            Text("Your logs stay on this phone and come back when you log in again.")
         }
         .confirmationDialog("Delete your FlexUp account?", isPresented: $confirmDelete, titleVisibility: .visible) {
             Button("Delete account", role: .destructive) {
@@ -267,7 +267,9 @@ struct StatsSection: View {
             }
             Button("Keep my account", role: .cancel) {}
         } message: {
-            Text("This permanently deletes your FlexUp account and all of your data — on our server and on this phone. It can't be undone.")
+            Text(store.community.isSignedIn
+                 ? "This permanently deletes your FlexUp account and all of your data, on our server and on this phone. It can't be undone."
+                 : "This permanently deletes your account and every log, photo and reminder on this phone. It can't be undone.")
         }
     }
 

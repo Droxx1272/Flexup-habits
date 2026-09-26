@@ -19,6 +19,8 @@ struct MealEstimate: Decodable {
         let name: String
         let calories: Int
         let portion: String
+        /// Estimated weight of the portion. Optional: older servers don't send it.
+        let grams: Double?
         // Optional on our side so a reply without them still decodes; the
         // schema asks for them on every item.
         let proteinG: Double?
@@ -29,7 +31,7 @@ struct MealEstimate: Decodable {
         let sodiumMg: Double?
 
         enum CodingKeys: String, CodingKey {
-            case name, calories, portion
+            case name, calories, portion, grams
             case proteinG = "protein_g"
             case carbsG = "carbs_g"
             case fatG = "fat_g"
@@ -61,7 +63,14 @@ struct MealEstimate: Decodable {
     /// Convert to the editable model the review UI drives.
     var foodItems: [FoodItem] {
         items.map {
-            FoodItem(name: $0.name, baseCalories: max(0, $0.calories), portion: $0.portion, baseMacros: $0.macros)
+            FoodItem(
+                name: $0.name,
+                baseCalories: max(0, $0.calories),
+                portion: $0.portion,
+                baseMacros: $0.macros,
+                grams: ($0.grams ?? 0) > 0 ? $0.grams : nil,
+                source: .ai
+            )
         }
     }
 }
@@ -76,8 +85,8 @@ enum CalorieEstimatorError: LocalizedError {
         switch self {
         case .notConfigured: "AI estimates aren't switched on in this build yet. Log it by hand for now."
         case .badImage: "Couldn't read that photo."
-        case .offline: "You're offline — log it by hand, or try again when you're connected."
-        case .malformed: "Got an unexpected response — try again."
+        case .offline: "You're offline. Log it by hand, or try again when you're connected."
+        case .malformed: "Got an unexpected response. Try again."
         }
     }
 }
@@ -90,7 +99,8 @@ enum CalorieEstimator {
     static func estimate(
         image: UIImage,
         cuisineContext: String = "",
-        correction: String = ""
+        correction: String = "",
+        day: String
     ) async throws -> MealEstimate {
         guard let baseURL = BackendConfig.baseURL else { throw CalorieEstimatorError.notConfigured }
         guard let jpeg = downscaledJPEG(from: image) else { throw CalorieEstimatorError.badImage }
@@ -101,6 +111,8 @@ enum CalorieEstimator {
             "media_type": "image/jpeg",
             "cuisine_context": cuisineContext.trimmingCharacters(in: .whitespacesAndNewlines),
             "correction": correction.trimmingCharacters(in: .whitespacesAndNewlines),
+            // The server's daily cap resets at this person's midnight.
+            "day": day,
         ])
 
         do {

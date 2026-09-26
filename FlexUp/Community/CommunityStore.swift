@@ -35,7 +35,7 @@ final class CommunityStore {
     @ObservationIgnored private var isFlushing = false
     private static let pendingKey = "flexupPendingActivities"
 
-    var isAvailable: Bool { BackendConfig.isConfigured }
+    var isAvailable: Bool { BackendConfig.isConfigured && FeatureFlags.cloudAccounts }
 
     init() {
         let savedToken = Keychain.read()
@@ -184,9 +184,9 @@ final class CommunityStore {
     func handle(_ error: Error) {
         if let serverError = error as? ServerError, serverError.type == "signed_out" {
             clearSession()
-            errorMessage = "You were signed out of FlexUp friends — sign in again."
+            errorMessage = "You were signed out of FlexUp friends. Sign in again."
         } else if let urlError = error as? URLError, urlError.code == .notConnectedToInternet {
-            errorMessage = "You're offline — friends will update when you're back."
+            errorMessage = "You're offline. Friends will update when you're back."
         } else {
             errorMessage = error.localizedDescription
         }
@@ -309,7 +309,7 @@ final class CommunityStore {
             } catch let error as ServerError where error.status == 400 {
                 // The server will never accept this one; don't retry forever.
             } catch {
-                return // offline or signed out — try again next time
+                return // offline or signed out. Try again next time
             }
             pending.removeFirst()
             savePending()

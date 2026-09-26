@@ -20,7 +20,7 @@ struct ComingSoonCommunity: View {
                     Text("DO IT TOGETHER")
                         .font(.flexDisplay(30))
                         .foregroundStyle(Theme.ink)
-                    Text("People who tell a friend follow through far more often. Community lands in an upcoming update — your account is already set for it.")
+                    Text("People who tell a friend follow through far more often. Community lands in an upcoming update.")
                         .font(.flexCaption())
                         .foregroundStyle(Theme.inkSubtle)
                 }

@@ -43,7 +43,7 @@ final class VoiceDictation {
 
     private func beginRecording() {
         guard let recognizer, recognizer.isAvailable else {
-            errorMessage = "Dictation isn't available right now — type instead."
+            errorMessage = "Dictation isn't available right now. Type instead."
             return
         }
 
@@ -76,7 +76,7 @@ final class VoiceDictation {
             try audioEngine.start()
             isRecording = true
         } catch {
-            errorMessage = "Couldn't start the microphone — type instead."
+            errorMessage = "Couldn't start the microphone. Type instead."
             cleanUp()
         }
     }

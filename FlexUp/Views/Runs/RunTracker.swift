@@ -206,7 +206,7 @@ enum RunFormat {
     }
 
     static func pace(_ secondsPerKm: Double?) -> String {
-        guard let secondsPerKm, secondsPerKm.isFinite, secondsPerKm < 3600 else { return "—" }
+        guard let secondsPerKm, secondsPerKm.isFinite, secondsPerKm < 3600 else { return "-" }
         let total = Int(secondsPerKm)
         return String(format: "%d'%02d\"", total / 60, total % 60)
     }

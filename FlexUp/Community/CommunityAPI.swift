@@ -60,7 +60,7 @@ struct CommunityAPI {
         do {
             return try Self.decoder.decode(T.self, from: data)
         } catch {
-            throw ServerError(status: 200, type: "malformed", message: "Got an unexpected response — try again.")
+            throw ServerError(status: 200, type: "malformed", message: "Got an unexpected response. Try again.")
         }
     }
 }

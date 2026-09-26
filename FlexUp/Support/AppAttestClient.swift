@@ -26,9 +26,9 @@ actor AppAttestClient {
         var errorDescription: String? {
             switch self {
             case .unsupported:
-                "AI estimates need a real iPhone — this device can't prove the app is genuine."
+                "AI estimates need a real iPhone. This device can't prove the app is genuine."
             case .appleUnavailable:
-                "Apple's verification service didn't respond — try again in a moment."
+                "Apple's verification service didn't respond. Try again in a moment."
             case .couldNotVerify:
                 "This copy of FlexUp couldn't be verified."
             }

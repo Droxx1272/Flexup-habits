@@ -120,6 +120,8 @@ environment to **production** for release builds. Once everyone is on such a bui
 | Type-check | `npm run typecheck` |
 | Run locally | copy `.dev.vars.example` to `.dev.vars`, fill it in, `npm run dev` |
 | Emergency: turn App Attest off | set `"ATTEST_MODE": "off"`, `npm run deploy` |
+| Change the daily AI photo cap (default 3) | set `"DAILY_ESTIMATE_LIMIT"` in `wrangler.jsonc`, `npm run deploy` (also change `AppStore.dailyAIEstimateLimit` in the app) |
+| Sharper estimates (about 2x the cost) | add `"AI_MODEL": "claude-sonnet-5"` to `vars`, `npm run deploy` |
 
 ## Cost
 

@@ -6,6 +6,14 @@
  */
 
 const SCHEMA = [
+  // AI meal-photo estimates per install per local day (the daily cap).
+  `CREATE TABLE IF NOT EXISTS ai_usage (
+     caller TEXT NOT NULL,
+     day TEXT NOT NULL,
+     count INTEGER NOT NULL DEFAULT 0,
+     updated_at TEXT NOT NULL DEFAULT '',
+     PRIMARY KEY (caller, day)
+   )`,
   `CREATE TABLE IF NOT EXISTS users (
      id TEXT PRIMARY KEY,
      email TEXT UNIQUE,

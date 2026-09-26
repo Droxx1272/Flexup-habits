@@ -8,4 +8,10 @@ enum FeatureFlags {
     /// in / delete) work either way. Flip to `true` once the moderation
     /// workflow in `backend/README.md` is being run.
     static let community = false
+
+    /// Server accounts (email + password / Sign in with Apple on the FlexUp
+    /// server). Off for now: accounts live on this phone and nothing but
+    /// AI meal photos leaves it. The server is still used for AI estimates
+    /// and the legal pages when `BackendConfig` is set.
+    static let cloudAccounts = false
 }

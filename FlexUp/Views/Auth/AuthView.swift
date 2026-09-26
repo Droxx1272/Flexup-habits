@@ -1,10 +1,9 @@
 import SwiftUI
 import AuthenticationServices
 
-/// The front door. With the FlexUp server connected, accounts are real:
-/// Sign in with Apple or email + password, the same account your friends
-/// add. Without a server (early development builds) it falls back to an
-/// on-device account so the rest of the app still works.
+/// The front door. With cloud accounts on (`FeatureFlags.cloudAccounts`)
+/// accounts live on the FlexUp server. Otherwise the account lives on this
+/// phone: Sign in with Apple or a name and email.
 struct AuthView: View {
     @Environment(AppStore.self) private var store
     @Environment(\.colorScheme) private var colorScheme
@@ -36,7 +35,7 @@ struct AuthView: View {
                 Spacer()
 
                 VStack(spacing: 12) {
-                    if BackendConfig.isConfigured {
+                    if BackendConfig.isConfigured && FeatureFlags.cloudAccounts {
                         NavigationLink(value: AccountMode.create) {
                             Text("Create account")
                         }
@@ -47,7 +46,12 @@ struct AuthView: View {
                         }
                         .buttonStyle(SecondaryButtonStyle())
                     } else {
-                        SignInWithAppleButton(.signIn) { request in
+                        Button("Continue with email") {
+                            showEmailForm = true
+                        }
+                        .buttonStyle(PrimaryButtonStyle())
+
+                        SignInWithAppleButton(.continue) { request in
                             request.requestedScopes = [.fullName, .email]
                         } onCompletion: { result in
                             handleApple(result)
@@ -55,11 +59,6 @@ struct AuthView: View {
                         .signInWithAppleButtonStyle(colorScheme == .dark ? .white : .black)
                         .frame(height: 54)
                         .clipShape(Capsule())
-
-                        Button("Continue with email") {
-                            showEmailForm = true
-                        }
-                        .buttonStyle(SecondaryButtonStyle())
                     }
 
                     if let authError {
@@ -69,7 +68,7 @@ struct AuthView: View {
                             .multilineTextAlignment(.center)
                     }
 
-                    Text(BackendConfig.isConfigured && FeatureFlags.community
+                    Text(FeatureFlags.cloudAccounts && FeatureFlags.community
                          ? "YOUR LOGS STAY ON YOUR PHONE. FRIENDS SEE ONLY WHAT YOU SHARE."
                          : "YOUR LOGS STAY ON YOUR PHONE.")
                         .font(.flexMono(9))
@@ -99,12 +98,12 @@ struct AuthView: View {
         store.signIn(Account(userID: me.id, name: me.name, email: me.email, provider: provider))
     }
 
-    /// On-device account, used only when no FlexUp server is configured.
+    /// On-device account, used while cloud accounts are off.
     private func handleApple(_ result: Result<ASAuthorization, Error>) {
         switch result {
         case .success(let authorization):
             guard let credential = authorization.credential as? ASAuthorizationAppleIDCredential else {
-                authError = "Couldn't read the Apple credential — try email instead."
+                authError = "Couldn't read the Apple credential. Try email instead."
                 return
             }
             let fullName = [credential.fullName?.givenName, credential.fullName?.familyName]
@@ -119,7 +118,7 @@ struct AuthView: View {
         case .failure:
             // Most common cause in development: the Sign In with Apple
             // capability isn't enabled for this build. Email still works.
-            authError = "Apple sign-in isn't available on this build — continue with email below."
+            authError = "Apple sign-in isn't set up on this build yet. Use email instead."
         }
     }
 }
@@ -172,13 +171,13 @@ struct EmailSignInSheet: View {
                 .background(Theme.card)
                 .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
 
-            Text("This creates an account on this device. Verification and sync arrive with the FlexUp backend.")
+            Text("Your account and logs stay on this phone. Log back in with the same email and everything is still here.")
                 .font(.flexCaption())
                 .foregroundStyle(Theme.inkSubtle)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 10)
 
-            Button("Create account") {
+            Button("Continue") {
                 store.signIn(Account(
                     userID: "email:\(email.trimmingCharacters(in: .whitespaces).lowercased())",
                     name: name.trimmingCharacters(in: .whitespaces),

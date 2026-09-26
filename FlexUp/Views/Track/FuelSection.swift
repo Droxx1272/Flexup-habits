@@ -215,7 +215,7 @@ struct FuelSection: View {
                 }
 
                 if consumed > 0 && known < consumed {
-                    Text("Macros cover \(known) of \(consumed) kcal — entries logged with calories only aren't counted here.")
+                    Text("Macros cover \(known) of \(consumed) kcal. Entries logged with calories only aren't counted here.")
                         .font(.flexCaption())
                         .foregroundStyle(Theme.amber)
                 }
@@ -636,6 +636,7 @@ struct AddFoodSheet: View {
     @State private var correction = ""
     @State private var showContextEditor = false
     @State private var showAIConsent = false
+    @State private var searchRequest: FoodSearchRequest?
     @State private var dictation = VoiceDictation()
 
     /// Hand-entered macros. Optional — calories alone are still a valid log.
@@ -710,7 +711,7 @@ struct AddFoodSheet: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     HStack {
-                        Text(isReviewing ? "CHECK THE ESTIMATE" : "LOG FOOD")
+                        Text(isReviewing ? (photoData != nil ? "CHECK THE ESTIMATE" : "YOUR PLATE") : "LOG FOOD")
                             .font(.flexMono(12))
                             .tracking(2)
                             .foregroundStyle(Theme.ink)
@@ -728,9 +729,12 @@ struct AddFoodSheet: View {
 
                     if isReviewing {
                         itemsEditor
-                        addOnsRow
-                        correctionRow
+                        if photoData != nil {
+                            addOnsRow
+                            correctionRow
+                        }
                     } else {
+                        foodSearchButton
                         manualEntry
                         macroFields
                         recentRow
@@ -765,6 +769,11 @@ struct AddFoodSheet: View {
         }
         .sheet(isPresented: $showContextEditor) {
             CuisineContextSheet()
+        }
+        .sheet(item: $searchRequest) { request in
+            FoodSearchSheet(request: request) { item in
+                addFromDatabase(item, replacing: request.replacing)
+            }
         }
         .onChange(of: name) { _, newValue in
             // Typed something else after a preset: its hidden sugar/sodium
@@ -818,6 +827,7 @@ struct AddFoodSheet: View {
                     }
 
                     if BackendConfig.isConfigured {
+                        let left = store.aiEstimatesLeftToday
                         Button {
                             runEstimate()
                         } label: {
@@ -828,12 +838,21 @@ struct AddFoodSheet: View {
                                     Image(systemName: "sparkles")
                                 }
                                 Text(estimating
-                                     ? "Estimating…"
+                                     ? "Estimating"
                                      : (isReviewing ? "Re-estimate with corrections" : "Estimate calories with AI"))
                             }
                         }
                         .buttonStyle(SecondaryButtonStyle(tint: Theme.accent, background: Theme.accentSoft))
-                        .disabled(estimating)
+                        .disabled(estimating || left == 0)
+                        .opacity(left == 0 ? 0.5 : 1)
+
+                        Text(left == 0
+                             ? "You've used today's \(AppStore.dailyAIEstimateLimit) AI estimates. Search the food list or enter it by hand."
+                             : "\(left) of \(AppStore.dailyAIEstimateLimit) AI estimates left today")
+                            .font(.flexCaption())
+                            .foregroundStyle(Theme.inkSubtle)
+                            .frame(maxWidth: .infinity)
+                            .multilineTextAlignment(.center)
 
                         cuisineRow
 
@@ -845,7 +864,7 @@ struct AddFoodSheet: View {
                     } else {
                         // Honest label: the photo still saves with the entry,
                         // but no AI runs until the server is connected.
-                        Text("AI estimates aren't switched on in this build yet — the photo is saved with your entry. Add the calories below.")
+                        Text("AI estimates aren't switched on in this build yet. The photo is saved with your entry. Add the calories below.")
                             .font(.flexCaption())
                             .foregroundStyle(Theme.inkSubtle)
                     }
@@ -935,6 +954,13 @@ struct AddFoodSheet: View {
                 itemRow($item)
             }
 
+            Button {
+                searchRequest = FoodSearchRequest()
+            } label: {
+                Label("Add another food", systemImage: "plus")
+            }
+            .buttonStyle(SecondaryButtonStyle())
+
             if let plateMacros {
                 HStack(spacing: 0) {
                     plateStat("PROTEIN", "\(Int(plateMacros.protein.rounded()))g")
@@ -947,9 +973,11 @@ struct AddFoodSheet: View {
                 .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
             }
 
-            Text("AI estimates are approximate and not medical or nutrition advice. Adjust anything that looks off.")
-                .font(.flexCaption())
-                .foregroundStyle(Theme.inkSubtle)
+            if items.contains(where: { $0.source != .usda && !$0.isAddOn }) {
+                Text("AI estimates are approximate and not medical or nutrition advice. Tap Check on any item to swap in exact USDA numbers.")
+                    .font(.flexCaption())
+                    .foregroundStyle(Theme.inkSubtle)
+            }
 
             if let estimateNote {
                 Text(estimateNote)
@@ -972,10 +1000,10 @@ struct AddFoodSheet: View {
                     Text(value.name)
                         .font(.flexBodyBold())
                         .foregroundStyle(Theme.ink)
-                    Text(value.isAddOn ? "ADDED · \(value.portion.uppercased())" : value.portion.uppercased())
+                    Text(portionCaption(value))
                         .font(.flexMono(9))
                         .tracking(1)
-                        .foregroundStyle(value.isAddOn ? Theme.amber : Theme.inkSubtle)
+                        .foregroundStyle(value.isAddOn ? Theme.amber : (value.source == .usda ? Theme.accent : Theme.inkSubtle))
                     if let macros = value.macros {
                         Text(macros.shortLabel)
                             .font(.flexMono(9))
@@ -1002,6 +1030,25 @@ struct AddFoodSheet: View {
                     item.multiplier.wrappedValue = min(6, value.multiplier + 0.25)
                 }
                 Spacer()
+                if value.source != .usda && !value.isAddOn {
+                    Button {
+                        searchRequest = FoodSearchRequest(
+                            query: value.name,
+                            grams: value.grams.map { $0 * value.multiplier },
+                            replacing: value.id
+                        )
+                    } label: {
+                        Label("Check", systemImage: "checkmark.seal")
+                            .font(.flexMono(10))
+                            .foregroundStyle(Theme.accent)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 7)
+                            .background(Theme.accentSoft)
+                            .clipShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityHint("Find this food in the USDA list for exact numbers")
+                }
                 Button {
                     items.removeAll { $0.id == value.id }
                 } label: {
@@ -1015,6 +1062,55 @@ struct AddFoodSheet: View {
         .padding(14)
         .background(Theme.card)
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+    }
+
+    private func portionCaption(_ item: FoodItem) -> String {
+        let portion = item.portion.uppercased()
+        if item.isAddOn { return "ADDED · \(portion)" }
+        if item.source == .usda { return "USDA · \(portion)" }
+        return portion
+    }
+
+    /// A pick from the food list: joins the plate, or replaces the item it
+    /// was checking. The plate takes the first food's name if it has none.
+    private func addFromDatabase(_ item: FoodItem, replacing id: FoodItem.ID?) {
+        if let id, let index = items.firstIndex(where: { $0.id == id }) {
+            items[index] = item
+        } else {
+            items.append(item)
+        }
+        if name.trimmingCharacters(in: .whitespaces).isEmpty {
+            name = item.name
+        }
+    }
+
+    // MARK: Food search
+
+    private var foodSearchButton: some View {
+        Button {
+            searchRequest = FoodSearchRequest()
+        } label: {
+            HStack(spacing: 10) {
+                Image(systemName: "magnifyingglass")
+                    .foregroundStyle(Theme.accent)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Search foods")
+                        .font(.flexBodyBold())
+                        .foregroundStyle(Theme.ink)
+                    Text("12,000+ foods with exact USDA numbers")
+                        .font(.flexCaption())
+                        .foregroundStyle(Theme.inkSubtle)
+                }
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(Theme.inkSubtle)
+            }
+            .padding(14)
+            .background(Theme.card)
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        }
+        .buttonStyle(.plain)
     }
 
     private func plateStat(_ label: String, _ value: String) -> some View {
@@ -1115,7 +1211,7 @@ struct AddFoodSheet: View {
             }
 
             if dictation.isRecording {
-                Text("LISTENING — TAP STOP WHEN DONE")
+                Text("LISTENING. TAP STOP WHEN DONE")
                     .font(.flexMono(9))
                     .tracking(1)
                     .foregroundStyle(Theme.danger)
@@ -1312,6 +1408,7 @@ struct AddFoodSheet: View {
 
     private func runEstimate() {
         guard let photoData, let image = UIImage(data: photoData) else { return }
+        guard store.aiEstimatesLeftToday > 0 else { return }
         guard store.aiPhotoConsent == true else {
             showAIConsent = true
             return
@@ -1324,6 +1421,7 @@ struct AddFoodSheet: View {
 
         let context = store.cuisineContext
         let note = correction
+        let day = store.todayKey
         // Anything the user added by hand survives a re-estimate — they
         // know about the ghee, the model doesn't.
         let manualAddOns = items.filter(\.isAddOn)
@@ -1333,9 +1431,11 @@ struct AddFoodSheet: View {
                 let estimate = try await CalorieEstimator.estimate(
                     image: image,
                     cuisineContext: context,
-                    correction: note
+                    correction: note,
+                    day: day
                 )
                 await MainActor.run {
+                    store.recordAIEstimate()
                     name = estimate.mealName
                     items = estimate.foodItems + manualAddOns
                     estimateNote = "\(estimate.confidence.capitalized) confidence · \(estimate.notes)"
@@ -1343,6 +1443,10 @@ struct AddFoodSheet: View {
                 }
             } catch {
                 await MainActor.run {
+                    // The server counts too: trust it if it says we're out.
+                    if let serverError = error as? ServerError, serverError.type == "daily_limit" {
+                        store.recordAIEstimate(usedUp: true)
+                    }
                     estimateError = error.localizedDescription
                     estimating = false
                 }
@@ -1373,7 +1477,7 @@ struct CuisineContextSheet: View {
                 .tracking(2)
                 .foregroundStyle(Theme.ink)
 
-            Text("Western food databases misjudge regional and mixed dishes badly. Describing your kitchen once makes every future estimate better — the more specific, the better.")
+            Text("Western food databases misjudge regional and mixed dishes badly. Describing your kitchen once makes every future estimate better. The more specific, the better.")
                 .font(.flexCaption())
                 .foregroundStyle(Theme.inkSubtle)
 
@@ -1460,7 +1564,7 @@ struct LogWeightSheet: View {
             }
             .padding(.vertical, 10)
 
-            Text("Same time of day gives the truest trend — most people weigh in first thing in the morning.")
+            Text("Same time of day gives the truest trend. Most people weigh in first thing in the morning.")
                 .font(.flexCaption())
                 .foregroundStyle(Theme.inkSubtle)
                 .multilineTextAlignment(.center)
@@ -1589,7 +1693,7 @@ struct NutritionGoalsSheet: View {
                     goalRow("Carbs", unit: "g", value: $goals.carbs, range: 30...600, step: 5) { direction = nil }
                     goalRow("Fat", unit: "g", value: $goals.fat, range: 20...250, step: 5) { direction = nil }
 
-                    Text("Macros add up to \(macroCalories) kcal\(macrosMatchCalories ? " — in line with your calorie goal." : ", which is off from your \(goals.calories) kcal goal. Adjust one or the other.")")
+                    Text("Macros add up to \(macroCalories) kcal\(macrosMatchCalories ? ", in line with your calorie goal." : ", which is off from your \(goals.calories) kcal goal. Adjust one or the other.")")
                         .font(.flexCaption())
                         .foregroundStyle(macrosMatchCalories ? Theme.inkSubtle : Theme.amber)
 
@@ -1712,7 +1816,7 @@ struct FoodEntryDetailSheet: View {
                             nutrientTile("Sodium", value: "\(Int(macros.sodiumMg.rounded()))", unit: "MG")
                         }
                     } else {
-                        Text("Calories only — this entry was logged without macros.")
+                        Text("Calories only. This entry was logged without macros.")
                             .font(.flexCaption())
                             .foregroundStyle(Theme.inkSubtle)
                     }

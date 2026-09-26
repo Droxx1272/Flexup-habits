@@ -101,7 +101,7 @@ struct ActivityDetailView: View {
     private var chatCard: some View {
         FlexCard {
             VStack(alignment: .leading, spacing: 12) {
-                SectionHeader(title: "Group chat", subtitle: "Temporary — it disappears after the activity.")
+                SectionHeader(title: "Group chat", subtitle: "Temporary. It disappears after the activity.")
 
                 if live.isJoined {
                     if messages.isEmpty {

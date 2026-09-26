@@ -239,7 +239,7 @@ struct PostComposerSheet: View {
                                 .foregroundStyle(Theme.danger)
                         }
 
-                        Text("Keep it kind — posts follow the FlexUp community guidelines.")
+                        Text("Keep it kind. Posts follow the FlexUp community guidelines.")
                             .font(.flexCaption())
                             .foregroundStyle(Theme.inkSubtle)
                     }

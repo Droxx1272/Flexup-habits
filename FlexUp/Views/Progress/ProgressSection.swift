@@ -130,12 +130,12 @@ struct ProgressSection: View {
             HStack(spacing: 10) {
                 TrackStat(value: "\(store.completedCount(range))", label: "Done")
                 TrackStat(value: "\(store.wakeCheckIns(range))", label: "Wake-ups")
-                TrackStat(value: avgSleep.map { String(format: "%.1fh", $0) } ?? "—", label: "Avg sleep")
+                TrackStat(value: avgSleep.map { String(format: "%.1fh", $0) } ?? "-", label: "Avg sleep")
             }
             HStack(spacing: 10) {
                 TrackStat(value: String(format: "%.1f", km), label: "KM run")
                 TrackStat(value: "\(store.workouts(in: range).count)", label: "Sessions")
-                TrackStat(value: avgCalories.map { "\($0)" } ?? "—", label: "Avg kcal")
+                TrackStat(value: avgCalories.map { "\($0)" } ?? "-", label: "Avg kcal")
             }
         }
     }
@@ -148,7 +148,7 @@ struct ProgressSection: View {
             icon: "checkmark.circle",
             title: "Follow-through",
             subtitle: "Commitments completed, per \(bucketWord).",
-            headline: store.completionRate(range).map { "\($0)%" } ?? "—",
+            headline: store.completionRate(range).map { "\($0)%" } ?? "-",
             headlineLabel: "COMPLETED"
         ) {
             if points.isEmpty {
@@ -213,7 +213,7 @@ struct ProgressSection: View {
             icon: "moon.zzz.fill",
             title: "Sleep",
             subtitle: "Hours per night\(range.bucket == .day ? "" : ", weekly average"). Dashed line is \(Int(SleepGoal.targetHours))h.",
-            headline: avg.map { String(format: "%.1fh", $0) } ?? "—",
+            headline: avg.map { String(format: "%.1fh", $0) } ?? "-",
             headlineLabel: "AVERAGE"
         ) {
             let points = store.sleepSeries(range)
@@ -225,7 +225,7 @@ struct ProgressSection: View {
             HStack(spacing: 0) {
                 miniStat("\(sessions.count)", "Nights")
                 miniStat("\(onTarget)", "On target")
-                miniStat(avgQuality?.label ?? "—", "Quality")
+                miniStat(avgQuality?.label ?? "-", "Quality")
             }
         }
     }
@@ -253,7 +253,7 @@ struct ProgressSection: View {
             }
             HStack(spacing: 0) {
                 miniStat("\(runs.count)", "Runs")
-                miniStat(longest.map { String(format: "%.1f km", $0) } ?? "—", "Longest")
+                miniStat(longest.map { String(format: "%.1f km", $0) } ?? "-", "Longest")
                 miniStat(RunFormat.pace(bestPace), "Best pace")
             }
         }
@@ -284,7 +284,7 @@ struct ProgressSection: View {
             HStack(spacing: 0) {
                 miniStat("\(sessions.count)", "Sessions")
                 miniStat("\(sets)", "Sets")
-                miniStat(sessions.isEmpty ? "—" : "\(Int(volume / Double(sessions.count)))", "KG / session")
+                miniStat(sessions.isEmpty ? "-" : "\(Int(volume / Double(sessions.count)))", "KG / session")
             }
 
             if !records.isEmpty {
@@ -336,7 +336,7 @@ struct ProgressSection: View {
             icon: "fork.knife",
             title: "Diet",
             subtitle: "Average calories per logged day\(range.bucket == .day ? "" : ", by week"). Dashed line is your budget.",
-            headline: average.map { "\($0)" } ?? "—",
+            headline: average.map { "\($0)" } ?? "-",
             headlineLabel: "AVG KCAL"
         ) {
             let points = store.calorieSeries(range)
@@ -348,7 +348,7 @@ struct ProgressSection: View {
             HStack(spacing: 0) {
                 miniStat("\(loggedDays.count)/\(range.days)", "Days logged")
                 miniStat("\(within)", "In budget")
-                miniStat(avgWater.map { String(format: "%.1fL", Double($0) / 1000) } ?? "—", "Avg water")
+                miniStat(avgWater.map { String(format: "%.1fL", Double($0) / 1000) } ?? "-", "Avg water")
             }
             if let macros {
                 VStack(spacing: 10) {
@@ -377,7 +377,7 @@ struct ProgressSection: View {
             icon: "scalemass",
             title: "Body",
             subtitle: "Body weight\(range.bucket == .day ? "" : ", weekly average").",
-            headline: store.latestWeight.map { String(format: "%.1f", $0.kilograms) } ?? "—",
+            headline: store.latestWeight.map { String(format: "%.1f", $0.kilograms) } ?? "-",
             headlineLabel: "KG NOW"
         ) {
             if points.isEmpty {
@@ -386,7 +386,7 @@ struct ProgressSection: View {
                 lineChart(points, color: Theme.ink, includesZero: false)
             }
             HStack(spacing: 0) {
-                miniStat(change.map { String(format: "%+.1f kg", $0) } ?? "—", "Change")
+                miniStat(change.map { String(format: "%+.1f kg", $0) } ?? "-", "Change")
                 miniStat("\(entries.count)", "Weigh-ins")
                 miniStat("\(photos)", "Photos")
             }

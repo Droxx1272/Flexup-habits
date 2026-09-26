@@ -29,7 +29,7 @@ struct AIConsentSheet: View {
             VStack(alignment: .leading, spacing: 12) {
                 point("photo", "This meal photo, plus any note or cuisine you've added, is sent to FlexUp's server and to Anthropic's Claude AI to estimate calories and macros.")
                 point("trash", "FlexUp doesn't keep the photo, and Anthropic doesn't use it to train its models.")
-                point("lock", "Nothing else leaves your phone — not your other logs, weight, runs or progress photos.")
+                point("lock", "Nothing else leaves your phone. Your other logs, weight, runs and progress photos stay here.")
                 point("slider.horizontal.3", "Change your mind any time in Profile → Privacy & data.")
             }
 
@@ -95,7 +95,7 @@ struct PrivacyDataView: View {
                             .font(.flexMono(10))
                             .tracking(1.5)
                             .foregroundStyle(Theme.accent)
-                        Text("Wake-ups, sleep, runs and routes, workouts, food, weight and progress photos are stored only on this iPhone. Your account (name and email) is the only thing we keep.")
+                        Text("Your account, wake-ups, sleep, runs and routes, workouts, food, weight and photos are stored only on this iPhone. The only thing that ever leaves it is a meal photo you ask FlexUp to estimate.")
                             .font(.flexCaption())
                             .foregroundStyle(Theme.ink)
                     }
@@ -159,7 +159,9 @@ struct PrivacyDataView: View {
             }
             Button("Keep my account", role: .cancel) {}
         } message: {
-            Text("This permanently deletes your FlexUp account and all of your data — on our server and on this phone. It can't be undone.")
+            Text(store.community.isSignedIn
+                 ? "This permanently deletes your FlexUp account and all of your data, on our server and on this phone. It can't be undone."
+                 : "This permanently deletes your account and every log, photo and reminder on this phone. It can't be undone.")
         }
     }
 

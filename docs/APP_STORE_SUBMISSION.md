@@ -45,10 +45,7 @@
 
 **App Privacy**
 - Data used to track you: **none**.
-- Data linked to you, for **App Functionality**:
-  - Contact Info → **Name**
-  - Contact Info → **Email Address**
-  - Identifiers → **User ID**
+- Data linked to you: **none** (accounts live on the phone while `FeatureFlags.cloudAccounts` is off).
 - Data not linked to you, for **App Functionality**:
   - User Content → **Photos or Videos** (meal photos, only when the person asks for an AI estimate)
   - User Content → **Other User Content** (meal notes)
@@ -59,8 +56,8 @@
 ## Review notes (paste into App Review Information)
 
 ```
-Demo account: <email> / <password>
-(or tap "Create account" — email sign-up works instantly)
+No demo account needed: tap "Continue with email", enter any name and
+email. The account lives on the device; nothing is sent to a server.
 
 FlexUp is a habit and accountability app for four daily pillars: Wake, Run, Gym, Diet.
 - Wake: on iOS 26 it schedules a real alarm with AlarmKit; on earlier iOS it uses
@@ -68,7 +65,12 @@ FlexUp is a habit and accountability app for four daily pillars: Wake, Run, Gym,
 - Run: GPS tracking during a recorded run only, including with the screen locked.
 - Diet: "Estimate calories with AI" sends the meal photo to our server and to Anthropic's
   Claude, only after the user agrees in an in-app consent screen.
-- All logs are stored on the device. Account deletion: Today → Stats → Delete account.
+- Wake check-in can require a photo of a "proof spot" (set in Wake → Edit wake-up).
+  The two photos are compared on the device with Apple's Vision framework.
+- AI meal estimates are limited to 3 per day. The food search uses the bundled
+  USDA FoodData Central database (public domain), offline.
+- All logs and the account are stored on the device. Account deletion (erases all
+  data): Today → Stats → Delete account, or Profile → Privacy and data.
 ```
 
 ## Known review risk

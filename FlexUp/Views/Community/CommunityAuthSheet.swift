@@ -268,7 +268,7 @@ struct AccountForm: View {
               let tokenData = credential.identityToken,
               let identityToken = String(data: tokenData, encoding: .utf8) else {
             if case .failure(let error) = result, (error as? ASAuthorizationError)?.code == .canceled { return }
-            errorText = "Apple sign-in isn't available on this build — use email instead."
+            errorText = "Apple sign-in isn't available on this build. Use email instead."
             return
         }
         let fullName = [credential.fullName?.givenName, credential.fullName?.familyName]
@@ -303,7 +303,7 @@ struct GuidelinesSheet: View {
         ("Keep it real", "Post what you actually did. No fake progress, no spam, no selling."),
         ("Zero tolerance", "No harassment, bullying, hate, threats, sexual or violent content. Accounts that break this are removed."),
         ("Protect privacy", "Don't share other people's photos or details without their OK."),
-        ("Report, block, move on", "Use ⋯ → Report on anything that crosses the line — we review reports within 24 hours. Block anyone, any time."),
+        ("Report, block, move on", "Use ⋯ → Report on anything that crosses the line. We review reports within 24 hours. Block anyone, any time."),
     ]
 
     var body: some View {

@@ -315,7 +315,7 @@ struct OnboardingView: View {
             .background(Theme.ink)
             .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
 
-            Text("No feeds. No noise. Four pillars, one streak at a time — built to get you off your phone.")
+            Text("No feeds. No noise. Four pillars, one streak at a time. Built to get you off your phone.")
                 .font(.flexBody())
                 .foregroundStyle(Theme.inkSubtle)
         }
@@ -355,7 +355,7 @@ struct OnboardingView: View {
 
     private var identityStep: some View {
         VStack(alignment: .leading, spacing: 24) {
-            stepHeader("Who are you becoming?", "Not a goal — an identity. Pick the person you're building toward.")
+            stepHeader("Who are you becoming?", "Not a goal. An identity. Pick the person you're building toward.")
             LazyVGrid(columns: interestColumns, spacing: 10) {
                 ForEach(Self.identityOptions) { option in
                     identityCard(option)
@@ -418,7 +418,7 @@ struct OnboardingView: View {
 
     private var interestsStep: some View {
         VStack(alignment: .leading, spacing: 24) {
-            stepHeader("What will you actually do?", "Choose the activities you'll show up for — they shape your starter habits.")
+            stepHeader("What will you actually do?", "Choose the activities you'll show up for. They shape your starter habits.")
             LazyVGrid(columns: interestColumns, spacing: 10) {
                 ForEach(ActivityCategory.allCases) { category in
                     interestCard(category)
@@ -593,7 +593,7 @@ struct OnboardingView: View {
 
     private var targetsStep: some View {
         VStack(alignment: .leading, spacing: 20) {
-            stepHeader("Set your week", "Targets you'd hit on a normal week — not your best one. You can change them any time.")
+            stepHeader("Set your week", "Targets you'd hit on a normal week. Not your best one. You can change them any time.")
 
             targetRow("RUNS PER WEEK", value: $runsPerWeek, range: 0...7, icon: "figure.run")
             targetRow("GYM SESSIONS PER WEEK", value: $gymPerWeek, range: 0...7, icon: "dumbbell.fill")
@@ -610,7 +610,7 @@ struct OnboardingView: View {
                         }
                     }
                 }
-                Text("Sets your macro split in Diet. Calories start at \(store.nutritionGoals.calories) kcal — adjust them there.")
+                Text("Sets your macro split in Diet. Calories start at \(store.nutritionGoals.calories) kcal. Adjust them there.")
                     .font(.flexCaption())
                     .foregroundStyle(Theme.inkSubtle)
             }
@@ -619,7 +619,7 @@ struct OnboardingView: View {
                 weightField("WEIGHT NOW", value: $currentWeight)
                 weightField("TARGET", value: $targetWeight)
             }
-            Text("Optional. Weight stays on your phone — it's never shared.")
+            Text("Optional. Weight stays on your phone. It's never shared.")
                 .font(.flexCaption())
                 .foregroundStyle(Theme.inkSubtle)
         }
@@ -653,7 +653,7 @@ struct OnboardingView: View {
                 .tracking(1.5)
                 .foregroundStyle(Theme.inkSubtle)
             HStack(alignment: .firstTextBaseline, spacing: 4) {
-                TextField("—", value: value, format: .number)
+                TextField("-", value: value, format: .number)
                     .keyboardType(.decimalPad)
                     .font(.flexStat(24))
                     .foregroundStyle(Theme.ink)
@@ -735,7 +735,7 @@ struct OnboardingView: View {
         VStack(alignment: .leading, spacing: 24) {
             stepHeader("Put a face to it", FeatureFlags.community
                        ? "Your crew sees your photo and city. Both optional."
-                       : "Add a photo for your profile. Optional — it stays on your phone.")
+                       : "Add a photo for your profile. Optional. It stays on your phone.")
 
             HStack {
                 Spacer()

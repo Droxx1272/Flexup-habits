@@ -21,6 +21,8 @@ final class AppStore {
     var runs: [Run] = []
     var workouts: [Workout] = []
     var routines: [Routine] = []
+    /// The workout in progress, if any. Survives the app closing.
+    var workoutDraft: WorkoutDraft?
     var weightEntries: [WeightEntry] = []
     var foodEntries: [FoodEntry] = []
     var progressPhotos: [ProgressPhoto] = []
@@ -37,6 +39,9 @@ final class AppStore {
     /// Permission to send meal photos to the AI estimator (App Store 5.1.2(i)).
     /// nil = never asked, so the app asks before the first estimate.
     var aiPhotoConsent: Bool?
+    /// AI meal-photo estimates used per `dayKey`. Capped at
+    /// `dailyAIEstimateLimit`; the server enforces the same cap.
+    var aiEstimatesByDay: [String: Int] = [:]
 
     /// Friends, cheers and nudges — the part of the app that lives on the
     /// FlexUp server. Reached as `store.community` so state still has one home.
@@ -116,6 +121,7 @@ final class AppStore {
         runs = []
         workouts = []
         routines = []
+        workoutDraft = nil
         weightEntries = []
         foodEntries = []
         progressPhotos = []
@@ -126,6 +132,7 @@ final class AppStore {
         goals = UserGoals()
         reminders = ReminderPreferences()
         aiPhotoConsent = nil
+        aiEstimatesByDay = [:]
         cuisineContext = ""
         wake = WakeConfig()
         wakeCheckInDays = []
@@ -186,6 +193,20 @@ final class AppStore {
         profile?.name = trimmedName
         let trimmedIdentity = identity.trimmingCharacters(in: .whitespacesAndNewlines)
         if !trimmedIdentity.isEmpty { profile?.identityStatement = trimmedIdentity }
+        save()
+    }
+
+    static let dailyAIEstimateLimit = 3
+
+    var aiEstimatesLeftToday: Int {
+        max(0, Self.dailyAIEstimateLimit - (aiEstimatesByDay[dayKey()] ?? 0))
+    }
+
+    /// Count one estimate against today. Old days are dropped as we go.
+    func recordAIEstimate(usedUp: Bool = false) {
+        let today = dayKey()
+        aiEstimatesByDay = aiEstimatesByDay.filter { $0.key == today }
+        aiEstimatesByDay[today] = usedUp ? Self.dailyAIEstimateLimit : (aiEstimatesByDay[today] ?? 0) + 1
         save()
     }
 
@@ -523,7 +544,7 @@ final class AppStore {
     /// Quick Start: do one small thing right now.
     func quickStart(_ category: ActivityCategory) {
         commitments.append(Commitment(
-            title: "\(category.label) — right now",
+            title: "\(category.label), right now",
             category: category,
             date: .now,
             status: .confirmed,
@@ -657,17 +678,35 @@ final class AppStore {
 
     // MARK: - Lift
 
-    /// Log a finished workout. Sets with zero reps are dropped; counts
-    /// toward today's gym commitment if one exists.
+    /// Log a finished workout. Only ticked sets with something in them are
+    /// kept; counts toward today's gym commitment if one exists.
     func logWorkout(title: String, duration: TimeInterval, exercises: [WorkoutExercise]) {
         let cleaned = exercises
             .map { exercise in
                 var copy = exercise
-                copy.sets = exercise.sets.filter { $0.reps > 0 }
+                copy.sets = exercise.sets
+                    .filter { ($0.isDone ?? true) && ($0.reps > 0 || ($0.seconds ?? 0) > 0) }
+                    .map { set in
+                        var kept = set
+                        kept.isDone = true
+                        return kept
+                    }
+                if copy.notes?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == true { copy.notes = nil }
                 return copy
             }
             .filter { !$0.sets.isEmpty }
-        guard !cleaned.isEmpty else { return }
+        workoutDraft = nil
+        guard !cleaned.isEmpty else {
+            save()
+            return
+        }
+
+        // PRs are judged against everything before this session.
+        let newRecords = cleaned.filter { exercise in
+            let best = bestOneRepMax(for: exercise.name) ?? 0
+            let today = exercise.sets.filter(\.counts).map(\.estimatedOneRepMax).max() ?? 0
+            return today > 0 && today > best && best > 0
+        }.count
 
         let workout = Workout(
             title: title.trimmingCharacters(in: .whitespaces).isEmpty ? "Workout" : title,
@@ -687,6 +726,7 @@ final class AppStore {
             detail: "\(workout.exercises.count) exercises · \(Int(workout.totalVolumeKg)) kg moved"
         )
 
+        let recordLine = newRecords == 0 ? "" : (newRecords == 1 ? " One new personal record." : " \(newRecords) new personal records.")
         if let commitment = todayCommitments.first(where: { $0.category == .gym && $0.status != .completed && $0.status != .missed }) {
             complete(commitment, sharesActivity: false)
             if celebration?.achievement == nil {
@@ -696,12 +736,60 @@ final class AppStore {
             unlocked.append(contentsOf: checkUnlocks())
             celebration = Celebration(
                 title: "Session logged.",
-                message: "\(Int(workout.totalVolumeKg)) kg moved across \(workout.totalSets) sets. Strength is built, not found.",
+                message: "\(Int(workout.totalVolumeKg)) kg moved across \(workout.totalSets) sets.\(recordLine)",
                 streak: nil,
                 achievement: unlocked.first
             )
         }
         save()
+    }
+
+    /// Keep the in-progress session on disk as it changes.
+    func updateWorkoutDraft(_ draft: WorkoutDraft?) {
+        workoutDraft = draft
+        save()
+    }
+
+    /// Every session that included this exercise, newest first.
+    func history(for exerciseName: String) -> [(date: Date, sets: [ExerciseSet])] {
+        workouts
+            .sorted { $0.date > $1.date }
+            .compactMap { workout in
+                workout.exercises.first { $0.name == exerciseName }.map { (workout.date, $0.sets) }
+            }
+    }
+
+    /// Best estimated one-rep max for an exercise, warm-ups excluded.
+    func bestOneRepMax(for exerciseName: String) -> Double? {
+        workouts
+            .flatMap(\.exercises)
+            .filter { $0.name == exerciseName }
+            .flatMap(\.sets)
+            .filter(\.counts)
+            .map(\.estimatedOneRepMax)
+            .max()
+    }
+
+    // MARK: - Rest timer
+
+    private static let restNotificationID = "rest-timer"
+
+    /// A single pending notification so the rest timer still speaks up
+    /// when the phone is locked. Well inside the 64-notification budget.
+    func scheduleRestNotification(after seconds: TimeInterval) {
+        let center = UNUserNotificationCenter.current()
+        center.removePendingNotificationRequests(withIdentifiers: [Self.restNotificationID])
+        guard seconds > 0 else { return }
+        let content = UNMutableNotificationContent()
+        content.title = "Rest's over"
+        content.body = "Next set."
+        content.sound = .default
+        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: seconds, repeats: false)
+        center.add(UNNotificationRequest(identifier: Self.restNotificationID, content: content, trigger: trigger))
+    }
+
+    func cancelRestNotification() {
+        UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [Self.restNotificationID])
     }
 
     func deleteWorkout(_ workout: Workout) {
@@ -723,15 +811,32 @@ final class AppStore {
 
     // MARK: - Routines
 
-    func saveRoutine(name: String, exerciseNames: [String]) {
+    /// Save exercises (with their sets as next time's targets) as a routine.
+    func saveRoutine(name: String, exercises: [WorkoutExercise]) {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty, !exerciseNames.isEmpty else { return }
+        guard !trimmed.isEmpty, !exercises.isEmpty else { return }
+        let template = exercises.map { exercise in
+            var copy = exercise
+            copy.sets = exercise.sets.map { ExerciseSet(weightKg: $0.weightKg, reps: $0.reps, kind: $0.kind, seconds: $0.seconds) }
+            return copy
+        }
         // Re-saving under an existing name replaces it rather than duplicating.
         if let index = routines.firstIndex(where: { $0.name.caseInsensitiveCompare(trimmed) == .orderedSame }) {
-            routines[index].exerciseNames = exerciseNames
+            routines[index].exerciseNames = template.map(\.name)
+            routines[index].exercises = template
         } else {
-            routines.append(Routine(name: trimmed, exerciseNames: exerciseNames))
+            routines.append(Routine(name: trimmed, exerciseNames: template.map(\.name), exercises: template))
         }
+        save()
+    }
+
+    func updateRoutine(_ routine: Routine) {
+        guard let index = routines.firstIndex(where: { $0.id == routine.id }) else {
+            routines.append(routine)
+            save()
+            return
+        }
+        routines[index] = routine
         save()
     }
 
@@ -782,7 +887,7 @@ final class AppStore {
             .flatMap(\.exercises)
             .filter { $0.name == exerciseName }
             .flatMap(\.sets)
-            .filter { $0.reps > 0 }
+            .filter { $0.reps > 0 && $0.counts }
             .map(\.weightKg)
             .max()
     }
@@ -966,6 +1071,19 @@ final class AppStore {
 
     /// Morning check-in — once per day. An optional photo (sky, grass, made
     /// bed) files as a check-in shot.
+    var proofSpotURL: URL? {
+        wake.proofSpotFileName.map { imageURL(fileName: $0) }
+    }
+
+    /// Set (or with nil, clear) the spot photo the morning check-in must match.
+    func setProofSpot(_ data: Data?) {
+        if let old = wake.proofSpotFileName {
+            try? FileManager.default.removeItem(at: imageURL(fileName: old))
+        }
+        wake.proofSpotFileName = data.flatMap { saveImage($0) }
+        save()
+    }
+
     func checkInWake(withPhoto data: Data? = nil) {
         guard !isWakeCheckedInToday else { return }
         if let data {
@@ -1008,7 +1126,7 @@ final class AppStore {
         ("This is the moment.", "The one where it gets decided either way."),
         ("Your streak is on the line.", "Open FlexUp and check in."),
         ("Last call.", "Get up now and the whole day is still yours."),
-        ("Morning's slipping.", "Check in — even late counts more than not at all."),
+        ("Morning's slipping.", "Check in. Even late counts more than not at all."),
     ]
 
     /// Identifiers for every wake notification, including the legacy
@@ -1486,7 +1604,7 @@ final class AppStore {
 
         if let days = inactiveDays, days >= 3 {
             return CoachInsight(
-                message: "It's been \(days) days since your last completion. No guilt — just restart small. A 15-minute walk resets everything.",
+                message: "It's been \(days) days since your last completion. No guilt. Just restart small. A 15-minute walk resets everything.",
                 actionLabel: "Start a walk",
                 action: .quickStart(.walk)
             )
@@ -1511,7 +1629,7 @@ final class AppStore {
 
         if !todayCommitments.isEmpty && todayProgress >= 1 {
             return CoachInsight(
-                message: "Everything you planned today is done, \(name). Go live your life — that's the whole point.",
+                message: "Everything you planned today is done, \(name). Go live your life. That's the whole point.",
                 actionLabel: nil,
                 action: nil
             )
@@ -1694,7 +1812,7 @@ final class AppStore {
         var best: [String: PersonalRecord] = [:]
         for workout in workouts {
             for exercise in workout.exercises {
-                for set in exercise.sets where set.weightKg > 0 && set.reps > 0 {
+                for set in exercise.sets where set.weightKg > 0 && set.reps > 0 && set.counts {
                     let isBetter: Bool
                     if let current = best[exercise.name] {
                         isBetter = set.weightKg > current.weightKg
@@ -1771,6 +1889,7 @@ final class AppStore {
         var runs: [Run]?
         var workouts: [Workout]?
         var routines: [Routine]?
+        var workoutDraft: WorkoutDraft?
         var weightEntries: [WeightEntry]?
         var foodEntries: [FoodEntry]?
         var progressPhotos: [ProgressPhoto]?
@@ -1788,6 +1907,7 @@ final class AppStore {
         var goals: UserGoals?
         var reminders: ReminderPreferences?
         var aiPhotoConsent: Bool?
+        var aiEstimatesByDay: [String: Int]?
         var moodByDay: [String: String]
         var chats: [UUID: [ChatMessage]]
     }
@@ -1817,6 +1937,7 @@ final class AppStore {
             runs: runs,
             workouts: workouts,
             routines: routines,
+            workoutDraft: workoutDraft,
             weightEntries: weightEntries,
             foodEntries: foodEntries,
             progressPhotos: progressPhotos,
@@ -1834,6 +1955,7 @@ final class AppStore {
             goals: goals,
             reminders: reminders,
             aiPhotoConsent: aiPhotoConsent,
+            aiEstimatesByDay: aiEstimatesByDay,
             moodByDay: moodByDay,
             chats: chats
         )
@@ -1867,6 +1989,7 @@ final class AppStore {
         runs = snapshot.runs ?? []
         workouts = snapshot.workouts ?? []
         routines = snapshot.routines ?? []
+        workoutDraft = snapshot.workoutDraft
         weightEntries = snapshot.weightEntries ?? []
         foodEntries = snapshot.foodEntries ?? []
         progressPhotos = snapshot.progressPhotos ?? []
@@ -1878,6 +2001,7 @@ final class AppStore {
         goals = snapshot.goals ?? UserGoals()
         reminders = snapshot.reminders ?? ReminderPreferences()
         aiPhotoConsent = snapshot.aiPhotoConsent
+        aiEstimatesByDay = snapshot.aiEstimatesByDay ?? [:]
         cuisineContext = snapshot.cuisineContext ?? ""
         wake = snapshot.wake ?? WakeConfig()
         wakeCheckInDays = snapshot.wakeCheckInDays ?? []

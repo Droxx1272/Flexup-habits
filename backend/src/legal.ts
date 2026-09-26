@@ -53,24 +53,24 @@ export function privacyPage(env: LegalEnv): Response {
 <h1>Privacy Policy</h1>
 <p class="sub">Last updated ${UPDATED}</p>
 
-<div class="card"><strong>The short version:</strong> your logs stay on your phone. We keep only what's needed for your account.
-We don't show ads, track you across apps, or sell anyone's data.</div>
+<div class="card"><strong>The short version:</strong> your account and your logs stay on your phone. The only thing that
+leaves it is a meal photo you choose to have estimated. We don't show ads, track you across apps, or sell anyone's data.</div>
 
 <h2>What stays on your device</h2>
-<p>Wake-ups and alarms, sleep, runs and their GPS routes, workouts, food and water logs, body weight, progress photos, habits,
-goals and commitments are stored on your iPhone only. They are removed when you delete the app.</p>
+<p>Your account (name and email), profile photo, wake-ups and alarms, wake check-in photos, sleep, runs and their GPS routes,
+workouts, food and water logs, body weight, progress photos, habits, goals and commitments are stored on your iPhone only. They
+are removed when you delete your account in the app or delete the app.</p>
 
 <h2>What we collect</h2>
 <ul>
-  <li><strong>Account details</strong>: your name, email address and an account ID. If you use Sign in with Apple, we get the
-  identifier and (optionally) the email Apple shares with us. Passwords are stored only as a salted hash. Used to sign you in.</li>
   <li><strong>Meal photos and notes, only when you ask for an AI estimate</strong>: after you agree in the app, the photo, any
   correction you type or speak, and your cuisine description are sent to our server and passed to Anthropic (Claude) to estimate
   calories. We don't store them. Anthropic processes them under its commercial terms, which don't allow using them to train its models
   (<a href="https://www.anthropic.com/legal/privacy">Anthropic privacy policy</a>). You can turn AI estimates off at any time
   in Profile → Privacy &amp; data.</li>
   <li><strong>An app-install key</strong>: Apple's App Attest creates a key on your device that proves requests come from the
-  genuine FlexUp app. It contains no personal information.</li>
+  genuine FlexUp app. It contains no personal information. We count AI estimates per key per day to enforce the daily limit, and
+  delete those counts after a few days.</li>
   <li><strong>Security logs</strong>: our host keeps short-lived request logs (such as IP address and time) to prevent
   abuse and enforce rate limits.</li>
 </ul>
@@ -94,8 +94,8 @@ or data-broker sharing, and no tracking.</p>
 anything is shared.</p>
 
 <h2>Keeping and deleting your data</h2>
-<p>Delete your account any time in the app (Today → Stats → Delete account). This permanently removes your account and everything
-stored with it on our server. To remove the data on your phone, delete the app.</p>
+<p>Delete your account any time in the app (Today → Stats → Delete account, or Profile → Privacy and data). This erases your
+account and every log, photo and reminder on your phone. We hold nothing else tied to you.</p>
 
 <h2>Children</h2>
 <p>FlexUp isn't directed at children under 13, and we don't knowingly collect their information.</p>
@@ -140,15 +140,16 @@ export function supportPage(env: LegalEnv): Response {
 <h1>Support</h1>
 <p>Need help? Email ${contact(env)}. We reply within two working days.</p>
 
-<h2>Forgot your password?</h2>
-<p>Email us from the address on your account and we'll help you back in. If you signed up with Apple, use Sign in with Apple.</p>
+<h2>Logging back in</h2>
+<p>Your account lives on your iPhone. Log out and back in with the same email (or Sign in with Apple) and everything is still there.
+Your logs move to a new phone with an iCloud or computer backup of your device.</p>
 
 <h2>My alarm didn't ring on silent</h2>
-<p>On iOS 26 and later, FlexUp schedules a real alarm that rings through silent mode — allow alarms when asked. On earlier
+<p>On iOS 26 and later, FlexUp schedules a real alarm that rings through silent mode. Allow alarms when asked. On earlier
 versions it sends time-sensitive notifications, which follow your silent switch.</p>
 
 <h2>Delete my account</h2>
-<p>In the app: Today → Stats → Delete account. This removes everything stored on our server.</p>
+<p>In the app: Today → Stats → Delete account. This erases your account and all your data on the phone.</p>
 
 <h2>Privacy</h2>
 <p>See our <a href="/privacy">privacy policy</a> and <a href="/terms">terms of use</a>.</p>`,

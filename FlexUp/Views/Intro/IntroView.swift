@@ -22,31 +22,31 @@ struct IntroView: View {
         Page(
             eyebrow: "FLEXUP",
             title: "Become who you said you'd be.",
-            body: "Most people know what to do. FlexUp is built for the doing — plan it, commit, do it, prove it, repeat.",
+            body: "Most people know what to do. FlexUp is built for the doing: plan it, commit, do it, prove it, repeat.",
             art: .manifesto
         ),
         Page(
-            eyebrow: "01 — WAKE",
+            eyebrow: "01 · WAKE",
             title: "Win the morning.",
             body: "Set your wake time once. On iOS 26 it rings like a real alarm, even on silent. Check in when you're up and log how you slept.",
             art: .wake
         ),
         Page(
-            eyebrow: "02 — RUN · GYM",
+            eyebrow: "02 · RUN · GYM",
             title: "Move. Lift. Log it.",
             body: "GPS runs with your route, splits and pace. A training log that remembers your last set, times your rest and catches every PR.",
             art: .move
         ),
         Page(
-            eyebrow: "03 — DIET",
+            eyebrow: "03 · DIET",
             title: "Snap the plate.",
-            body: "Photo in, itemised estimate out — calories and macros per item. Fix any portion, add the oil the camera missed, track water and protein.",
+            body: "Snap your plate and get calories and macros for each item. Fix any portion, add the oil the camera missed, track water and protein.",
             art: .fuel
         ),
         Page(
-            eyebrow: "04 — PROGRESS",
+            eyebrow: "04 · PROGRESS",
             title: "Watch yourself change.",
-            body: "Every pillar on one page, over a week, a month or a year. Days you didn't log stay empty — no fake numbers, ever.",
+            body: "Every pillar on one page, over a week, a month or a year. Days you didn't log stay empty. No fake numbers, ever.",
             art: .progress
         ),
     ]

@@ -16,6 +16,8 @@
     "APPLE_BUNDLE_ID": "com.flexup.FlexUp",
     // "required": only App Attest–verified installs get estimates. "off": skip it.
     "ATTEST_MODE": "required",
+    // AI meal-photo estimates per install per day. The app shows the same cap.
+    "DAILY_ESTIMATE_LIMIT": "3",
     // Builds run from Xcode attest in Apple's development environment. Set to
     // "false" once every user is on an App Store / TestFlight build with the
     // App Attest capability set to production.

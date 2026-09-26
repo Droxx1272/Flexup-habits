@@ -235,6 +235,9 @@ struct WakeConfig: Codable, Hashable {
     /// cancelled on reschedule. Optional — nil means notifications are
     /// carrying the wake-up.
     var alarmID: UUID?
+    /// Photo of the spot you must photograph again to check in (sink,
+    /// kettle, front door). nil = any photo counts.
+    var proofSpotFileName: String?
 
     var timeToday: Date {
         Calendar.current.date(bySettingHour: hour, minute: minute, second: 0, of: .now) ?? .now
@@ -341,6 +344,11 @@ enum MealType: String, Codable, CaseIterable, Identifiable {
 /// One component of a meal. The estimator proposes a name, a portion it
 /// believes it sees, and the calories for that portion; the user scales it
 /// with `multiplier` rather than retyping numbers.
+enum FoodSource: String, Codable, Hashable {
+    case ai
+    case usda
+}
+
 struct FoodItem: Identifiable, Codable, Hashable {
     var id = UUID()
     var name: String
@@ -354,6 +362,11 @@ struct FoodItem: Identifiable, Codable, Hashable {
     /// Nutrients for the portion in `portion`, before adjustment. Optional
     /// so items saved before macro tracking still decode.
     var baseMacros: Macros?
+    /// Weight of the base portion in grams, when known (USDA picks, and AI
+    /// estimates since they started reporting it).
+    var grams: Double?
+    /// Where the numbers came from. nil for items saved before this existed.
+    var source: FoodSource?
 
     var calories: Int { Int((Double(baseCalories) * multiplier).rounded()) }
     var macros: Macros? { baseMacros?.scaled(by: multiplier) }
@@ -471,24 +484,103 @@ enum DietDirection: String, CaseIterable, Identifiable {
 
 // MARK: - Lift (training log)
 
+/// How a set counts. Warm-ups are logged but left out of volume and PRs.
+enum SetKind: String, Codable, CaseIterable, Hashable {
+    case warmup, normal, failure, drop
+
+    var label: String {
+        switch self {
+        case .warmup: "Warm-up"
+        case .normal: "Normal"
+        case .failure: "Failure"
+        case .drop: "Drop set"
+        }
+    }
+
+    /// What the set column shows instead of a number.
+    var badge: String? {
+        switch self {
+        case .warmup: "W"
+        case .normal: nil
+        case .failure: "F"
+        case .drop: "D"
+        }
+    }
+}
+
+/// What gets recorded for an exercise.
+enum ExerciseKind: String, Codable, Hashable {
+    /// Weight and reps (bench press).
+    case weightReps
+    /// Reps, with optional added weight (pull-up, dip).
+    case bodyweight
+    /// A hold, in seconds (plank).
+    case duration
+}
+
 struct ExerciseSet: Identifiable, Codable, Hashable {
     var id = UUID()
     var weightKg: Double = 0
     var reps: Int = 0
+    /// nil for sets saved before set types existed; read as `.normal`.
+    var kind: SetKind?
+    /// Ticked off during the session. nil for older saves, which only kept
+    /// finished sets anyway.
+    var isDone: Bool?
+    /// For timed exercises.
+    var seconds: Int?
+
+    var setKind: SetKind { kind ?? .normal }
+    var counts: Bool { setKind != .warmup }
+
+    /// Epley estimate, the usual way apps compare sets of different reps.
+    var estimatedOneRepMax: Double {
+        guard weightKg > 0, reps > 0 else { return 0 }
+        return reps == 1 ? weightKg : weightKg * (1 + Double(reps) / 30)
+    }
 }
 
 struct WorkoutExercise: Identifiable, Codable, Hashable {
     var id = UUID()
     var name: String
     var sets: [ExerciseSet] = [ExerciseSet()]
+    var notes: String?
+    /// Rest after each set, in seconds. nil = the default 90. 0 = off.
+    var restSeconds: Int?
+    var kind: ExerciseKind?
+
+    var exerciseKind: ExerciseKind { kind ?? .weightReps }
 }
 
-/// A saved session template — the exercises, without the numbers. Starting
-/// from one beats rebuilding "Push day" from an empty list every time.
+/// A saved session template. Newer routines keep each exercise's sets
+/// (as targets); older ones only have the names.
 struct Routine: Identifiable, Codable, Hashable {
     var id = UUID()
     var name: String
     var exerciseNames: [String]
+    var exercises: [WorkoutExercise]?
+
+    /// Fresh, unticked exercises to start a session with.
+    var startingExercises: [WorkoutExercise] {
+        if let exercises, !exercises.isEmpty {
+            return exercises.map { exercise in
+                var copy = exercise
+                copy.id = UUID()
+                copy.sets = exercise.sets.map { ExerciseSet(weightKg: $0.weightKg, reps: $0.reps, kind: $0.kind, seconds: $0.seconds) }
+                if copy.sets.isEmpty { copy.sets = [ExerciseSet()] }
+                return copy
+            }
+        }
+        return exerciseNames.map { WorkoutExercise(name: $0) }
+    }
+}
+
+/// The session in progress, saved as it changes so a crash or a closed app
+/// doesn't lose it.
+struct WorkoutDraft: Codable, Hashable {
+    var title: String
+    var startedAt: Date
+    var exercises: [WorkoutExercise]
 }
 
 struct Workout: Identifiable, Codable, Hashable {
@@ -498,12 +590,13 @@ struct Workout: Identifiable, Codable, Hashable {
     var duration: TimeInterval
     var exercises: [WorkoutExercise]
 
+    /// Warm-ups don't count, as in every serious lifting log.
     var totalVolumeKg: Double {
-        exercises.flatMap(\.sets).reduce(0) { $0 + $1.weightKg * Double($1.reps) }
+        exercises.flatMap(\.sets).filter(\.counts).reduce(0) { $0 + $1.weightKg * Double($1.reps) }
     }
 
     var totalSets: Int {
-        exercises.reduce(0) { $0 + $1.sets.count }
+        exercises.reduce(0) { $0 + $1.sets.filter(\.counts).count }
     }
 }
 
@@ -606,7 +699,7 @@ struct Memory: Identifiable {
     var isHighlight: Bool = false
 
     var shareText: String {
-        "\(title) — \(subtitle) · \(date.formatted(date: .abbreviated, time: .omitted)) · FlexUp"
+        "\(title): \(subtitle) · \(date.formatted(date: .abbreviated, time: .omitted)) · FlexUp"
     }
 }
 

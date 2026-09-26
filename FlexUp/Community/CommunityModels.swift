@@ -210,7 +210,7 @@ struct AppNotification: Codable, Hashable, Identifiable {
     var sentence: String {
         switch type {
         case "friend_request": "\(actor.name) wants to be accountability partners"
-        case "friend_accepted": "\(actor.name) accepted — you're now in each other's crew"
+        case "friend_accepted": "\(actor.name) accepted. You're now in each other's crew"
         case "nudge": "\(actor.name) nudged you: \(text)"
         case "cheer": "\(actor.name) cheered \(text)"
         case "kudos": text.isEmpty ? "\(actor.name) gave you kudos" : "\(actor.name) gave kudos to “\(text)”"

@@ -110,7 +110,7 @@ struct TodayView: View {
         if total == 0 { return "Nothing scheduled. One small thing still counts." }
         if done == total { return "All done. Go live your life." }
         if done == 0 { return "\(total) waiting. Start with the easiest." }
-        return "\(done) of \(total) done — keep the thread going."
+        return "\(done) of \(total) done. Keep the thread going."
     }
 
     // MARK: This week vs goals

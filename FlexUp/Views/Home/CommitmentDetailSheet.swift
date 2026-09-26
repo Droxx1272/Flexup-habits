@@ -41,7 +41,7 @@ struct CommitmentDetailSheet: View {
             }
 
             if needsFallbackNote {
-                Text("\(live.verification.label) verification arrives with the FlexUp backend — completing on honor for now.")
+                Text("\(live.verification.label) verification arrives with the FlexUp backend. Completing on honor for now.")
                     .font(.flexCaption())
                     .foregroundStyle(Theme.inkSubtle)
                     .multilineTextAlignment(.center)
@@ -188,7 +188,7 @@ struct TimerSheet: View {
                 }
             }
 
-            Text("Phone down. Go do the thing — we'll keep count.")
+            Text("Phone down. Go do the thing. We'll keep count.")
                 .font(.flexBody())
                 .foregroundStyle(Theme.inkSubtle)
                 .multilineTextAlignment(.center)

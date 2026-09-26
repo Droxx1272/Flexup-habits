@@ -13,13 +13,18 @@ import Anthropic from "@anthropic-ai/sdk";
  * the deep-frying, the dressing already mixed in.
  */
 
-/** Haiku 4.5: ~$0.004–0.005 per photo, good enough for calorie awareness. */
+/**
+ * Haiku 4.5: about half a cent per photo. Set `AI_MODEL` in wrangler.jsonc
+ * (for example "claude-sonnet-5", roughly twice the cost) for sharper
+ * portion estimates without an app release.
+ */
 export const MODEL = "claude-haiku-4-5";
 
 export interface MealItem {
   name: string;
   calories: number;
   portion: string;
+  grams: number;
   protein_g: number;
   carbs_g: number;
   fat_g: number;
@@ -56,6 +61,7 @@ const outputSchema = {
           name: { type: "string", description: "Component name, e.g. 'Dal', 'Rice', 'Roti'" },
           calories: { type: "integer", description: "Calories for the portion described" },
           portion: { type: "string", description: "The portion you estimated, e.g. '1 cup', '2 pieces', '150 g'" },
+          grams: { type: "number", description: "Your best estimate of this portion's weight in grams, as served" },
           protein_g: { type: "number", description: "Protein in grams for this portion" },
           carbs_g: { type: "number", description: "Total carbohydrate in grams for this portion" },
           fat_g: { type: "number", description: "Fat in grams for this portion, including cooking fat" },
@@ -63,7 +69,7 @@ const outputSchema = {
           sugar_g: { type: "number", description: "Sugars in grams for this portion" },
           sodium_mg: { type: "number", description: "Sodium in milligrams for this portion" },
         },
-        required: ["name", "calories", "portion", "protein_g", "carbs_g", "fat_g", "fiber_g", "sugar_g", "sodium_mg"],
+        required: ["name", "calories", "portion", "grams", "protein_g", "carbs_g", "fat_g", "fiber_g", "sugar_g", "sodium_mg"],
         additionalProperties: false,
       },
     },
@@ -85,6 +91,7 @@ const outputSchema = {
 function buildPrompt(cuisineContext: string, correction: string): string {
   const parts = [
     "Estimate the calories in this meal photo for a tracking app. Break the plate into its distinct components and give each one its own line with the portion you think you see and the calories for that portion.",
+    "Estimate each portion's weight in grams as served. The app checks your calories against a food database using that weight, so judge the size carefully from plate, cutlery and hand references in the photo.",
     "For every component also give protein, carbohydrate, fat, fibre and sugar in grams and sodium in milligrams for the same portion. Keep them consistent with the calories (protein and carbs 4 kcal/g, fat 9 kcal/g) and with the recipe you assumed.",
     "Be realistic about cooking fat. Photos cannot show oil, ghee, butter, cream or sugar that is already cooked into a dish, and under-counting it is the most common way these estimates go wrong. Assume normal home-cooking amounts for the cuisine unless the food looks dry or explicitly plain.",
   ];
@@ -95,13 +102,13 @@ function buildPrompt(cuisineContext: string, correction: string): string {
     );
   } else {
     parts.push(
-      "Identify the cuisine from the photo and use portion sizes and recipes typical of that cuisine. Do not substitute a generic Western equivalent for a regional dish — name the actual dish where you recognise it.",
+      "Identify the cuisine from the photo and use portion sizes and recipes typical of that cuisine. Do not substitute a generic Western equivalent for a regional dish. Name the actual dish where you recognise it.",
     );
   }
 
   if (correction) {
     parts.push(
-      `The person has added this correction about the meal, which the photo may not show — treat it as authoritative and fold it into your estimate: "${correction}"`,
+      `The person has added this correction about the meal, which the photo may not show. Treat it as authoritative and fold it into your estimate: "${correction}"`,
     );
   }
 
@@ -113,9 +120,10 @@ export async function estimateMeal(
   image: { data: string; mediaType: ImageMediaType },
   cuisineContext: string,
   correction: string,
+  model: string = MODEL,
 ): Promise<MealEstimate> {
   const response = await client.messages.create({
-    model: MODEL,
+    model,
     max_tokens: 2500,
     output_config: { format: { type: "json_schema", schema: outputSchema } },
     messages: [
@@ -133,7 +141,7 @@ export async function estimateMeal(
     throw new EstimateRefusedError("The model declined to analyze this image.");
   }
   if (response.stop_reason === "max_tokens") {
-    throw new EstimateMalformedError("The estimate was cut off — try a photo with fewer items.");
+    throw new EstimateMalformedError("The estimate was cut off. Try a photo with fewer items.");
   }
 
   const text = response.content.find((block) => block.type === "text");
@@ -169,6 +177,7 @@ function sanitize(raw: unknown): MealEstimate {
         name,
         calories: Math.round(num(item.calories)),
         portion: str(item.portion, 60) || "1 serving",
+        grams: Math.round(num(item.grams)),
         protein_g: num(item.protein_g),
         carbs_g: num(item.carbs_g),
         fat_g: num(item.fat_g),

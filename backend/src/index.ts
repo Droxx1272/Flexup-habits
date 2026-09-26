@@ -6,6 +6,8 @@ import { EstimateMalformedError, EstimateRefusedError, estimateMeal, type ImageM
 import { HttpError, fail, json, parseJson, readBody as readLimitedBody } from "./http";
 import { privacyPage, supportPage, termsPage, type LegalEnv } from "./legal";
 import { socialRoutes } from "./social";
+import { ensureSchema, isoNow } from "./db";
+import { quotaDay } from "./quota";
 
 /**
  * FlexUp API. Turns a meal photo into an itemised estimate without the
@@ -33,6 +35,8 @@ export interface Env extends CommunityEnv, LegalEnv {
   CHALLENGE_SECRET: string;
   /** Optional. Lets simulator/debug builds through when they send it as X-FlexUp-Dev-Token. */
   DEV_BYPASS_TOKEN?: string;
+  DAILY_ESTIMATE_LIMIT?: string;
+  AI_MODEL?: string;
   APPLE_TEAM_ID: string;
   APPLE_BUNDLE_ID: string;
   /** "required" (default) or "off". */
@@ -82,15 +86,15 @@ function challengeSecret(env: Env): string {
 async function limitIP(request: Request, env: Env): Promise<void> {
   const ip = request.headers.get("cf-connecting-ip") ?? "unknown";
   const { success } = await env.IP_LIMITER.limit({ key: ip });
-  if (!success) throw new HttpError(429, "rate_limited", "That's a lot of estimates in a row — give it a minute.");
+  if (!success) throw new HttpError(429, "rate_limited", "That's a lot of estimates in a row. Give it a minute.");
 }
 
 /** Valid, unexpired, and never seen before. */
 async function consumeChallenge(env: Env, challenge: string): Promise<void> {
   const nonce = await checkChallenge(challengeSecret(env), challenge);
-  if (!nonce) throw new HttpError(401, "challenge_expired", "That request took too long — try again.");
+  if (!nonce) throw new HttpError(401, "challenge_expired", "That request took too long. Try again.");
   const { success } = await env.CHALLENGE_ONCE.limit({ key: nonce });
-  if (!success) throw new HttpError(401, "challenge_expired", "That request was already used — try again.");
+  if (!success) throw new HttpError(401, "challenge_expired", "That request was already used. Try again.");
 }
 
 function readBody(request: Request): Promise<Uint8Array> {
@@ -192,6 +196,44 @@ async function authorize(request: Request, env: Env, body: Uint8Array): Promise<
 
 // MARK: - Estimate
 
+/** Estimates each install gets per day unless `DAILY_ESTIMATE_LIMIT` says otherwise. */
+const DEFAULT_DAILY_ESTIMATES = 3;
+
+function dailyEstimateLimit(env: Env): number {
+  const parsed = Number.parseInt(env.DAILY_ESTIMATE_LIMIT ?? "", 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_DAILY_ESTIMATES;
+}
+
+/** Take one estimate from today's allowance, or refuse. */
+async function reserveEstimate(env: Env, caller: string, day: string): Promise<void> {
+  await ensureSchema(env.DB);
+  const now = isoNow();
+  const row = await env.DB.prepare(
+    `INSERT INTO ai_usage (caller, day, count, updated_at) VALUES (?1, ?2, 1, ?3)
+     ON CONFLICT (caller, day) DO UPDATE SET count = count + 1, updated_at = ?3
+     RETURNING count`,
+  )
+    .bind(caller, day, now)
+    .first<{ count: number }>();
+  const limit = dailyEstimateLimit(env);
+  if ((row?.count ?? 0) > limit) {
+    await releaseEstimate(env, caller, day);
+    throw new HttpError(429, "daily_limit", `That's your ${limit} AI estimates for today. Log the rest by hand or search the food list.`);
+  }
+  // Old counts are only needed for a day or two; sweep now and then.
+  if (Math.random() < 0.02) {
+    const cutoff = isoNow(new Date(Date.now() - 3 * 86_400_000));
+    await env.DB.prepare(`DELETE FROM ai_usage WHERE updated_at < ?1`).bind(cutoff).run();
+  }
+}
+
+/** Give the estimate back when the AI call didn't produce one. */
+async function releaseEstimate(env: Env, caller: string, day: string): Promise<void> {
+  await env.DB.prepare(`UPDATE ai_usage SET count = MAX(0, count - 1) WHERE caller = ?1 AND day = ?2`)
+    .bind(caller, day)
+    .run();
+}
+
 async function handleEstimate(request: Request, env: Env): Promise<Response> {
   if (!env.ANTHROPIC_API_KEY) {
     throw new HttpError(500, "not_configured", "The FlexUp server isn't set up yet (missing API key).");
@@ -201,7 +243,7 @@ async function handleEstimate(request: Request, env: Env): Promise<Response> {
   const bodyBytes = await readBody(request);
   const caller = await authorize(request, env, bodyBytes);
   const { success } = await env.INSTALL_LIMITER.limit({ key: caller });
-  if (!success) throw new HttpError(429, "rate_limited", "That's a lot of estimates in a row — give it a minute.");
+  if (!success) throw new HttpError(429, "rate_limited", "That's a lot of estimates in a row. Give it a minute.");
 
   const body = parseJson(bodyBytes);
   const image = body.image;
@@ -214,6 +256,11 @@ async function handleEstimate(request: Request, env: Env): Promise<Response> {
     throw new HttpError(400, "bad_request", "Unsupported photo format.");
   }
 
+  // The simulator's dev token isn't capped, so testing doesn't burn the allowance.
+  const day = quotaDay(body.day);
+  const capped = caller !== "dev";
+  if (capped) await reserveEstimate(env, caller, day);
+
   const client = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY, timeout: 60_000, maxRetries: 2 });
 
   try {
@@ -222,25 +269,27 @@ async function handleEstimate(request: Request, env: Env): Promise<Response> {
       { data: image, mediaType: mediaType as ImageMediaType },
       cleanText(body.cuisine_context),
       cleanText(body.correction),
+      env.AI_MODEL?.trim() || undefined,
     );
     return json(estimate);
   } catch (error) {
+    if (capped) await releaseEstimate(env, caller, day).catch(() => {});
     if (error instanceof EstimateRefusedError) throw new HttpError(422, "refused", error.message);
     if (error instanceof EstimateMalformedError) throw new HttpError(502, "malformed", error.message);
     if (error instanceof Anthropic.BadRequestError) {
       console.error("Anthropic 400", error.message);
-      throw new HttpError(400, "bad_request", "Couldn't read that photo — try another.");
+      throw new HttpError(400, "bad_request", "Couldn't read that photo. Try another.");
     }
     if (error instanceof Anthropic.AuthenticationError || error instanceof Anthropic.PermissionDeniedError) {
       console.error("Anthropic auth", error.status, error.message);
       throw new HttpError(500, "not_configured", "The FlexUp server's AI key isn't working.");
     }
     if (error instanceof Anthropic.RateLimitError) {
-      throw new HttpError(429, "rate_limited", "The AI is busy right now — try again in a moment.");
+      throw new HttpError(429, "rate_limited", "The AI is busy right now. Try again in a moment.");
     }
     if (error instanceof Anthropic.APIError) {
       console.error("Anthropic", error.status, error.message);
-      throw new HttpError(502, "upstream", "The AI didn't respond — try again.");
+      throw new HttpError(502, "upstream", "The AI didn't respond. Try again.");
     }
     throw error;
   }
@@ -310,7 +359,7 @@ export default {
     } catch (error) {
       if (error instanceof HttpError) return fail(error.status, error.type, error.message);
       console.error("Unexpected", error);
-      return fail(500, "internal", "Something went wrong — try again.");
+      return fail(500, "internal", "Something went wrong. Try again.");
     }
   },
 } satisfies ExportedHandler<Env>;

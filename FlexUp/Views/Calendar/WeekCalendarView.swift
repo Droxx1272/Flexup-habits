@@ -110,7 +110,7 @@ struct WeekCalendarView: View {
                 EmptyStateCard(
                     icon: "moon.zzz",
                     title: "Nothing planned",
-                    message: "Rest is part of the plan — or add one small thing.",
+                    message: "Rest is part of the plan. Or add one small thing.",
                     actionLabel: "Plan something",
                     action: { showPlanSheet = true }
                 )

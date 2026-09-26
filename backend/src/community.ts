@@ -140,13 +140,13 @@ function randomCode(length: number): string {
 async function limitAuth(request: Request, env: CommunityEnv): Promise<void> {
   const ip = request.headers.get("cf-connecting-ip") ?? "unknown";
   const { success } = await env.AUTH_LIMITER.limit({ key: ip });
-  if (!success) throw new HttpError(429, "rate_limited", "Too many attempts — wait a minute and try again.");
+  if (!success) throw new HttpError(429, "rate_limited", "Too many attempts. Wait a minute and try again.");
 }
 
 async function limitIP(request: Request, env: CommunityEnv): Promise<void> {
   const ip = request.headers.get("cf-connecting-ip") ?? "unknown";
   const { success } = await env.IP_LIMITER.limit({ key: ip });
-  if (!success) throw new HttpError(429, "rate_limited", "Slow down a little — try again in a minute.");
+  if (!success) throw new HttpError(429, "rate_limited", "Slow down a little. Try again in a minute.");
 }
 
 async function uniqueHandle(db: D1Database, name: string): Promise<string> {
@@ -253,7 +253,7 @@ async function signUp(request: Request, env: CommunityEnv): Promise<Response> {
   if (!name) throw new HttpError(400, "bad_name", "Add your name so friends know it's you.");
 
   const existing = await env.DB.prepare("SELECT 1 FROM users WHERE email = ?").bind(email).first();
-  if (existing) throw new HttpError(409, "email_taken", "There's already an account with that email — log in instead.");
+  if (existing) throw new HttpError(409, "email_taken", "There's already an account with that email. Log in instead.");
 
   const user = await createUser(env.DB, { name: filterText(name), email, passwordHash: await hashPassword(password), appleSub: null });
   return json(await startSession(env.DB, user));
@@ -279,7 +279,7 @@ async function appleSignIn(request: Request, env: CommunityEnv, fetchKeys: JwksF
   try {
     identity = await verifyAppleIdentityToken(token, env.APPLE_BUNDLE_ID, fetchKeys);
   } catch (error) {
-    if (error instanceof AuthError) throw new HttpError(401, "apple_rejected", "Apple sign-in couldn't be verified — try again.");
+    if (error instanceof AuthError) throw new HttpError(401, "apple_rejected", "Apple sign-in couldn't be verified. Try again.");
     throw error;
   }
 
@@ -329,7 +329,7 @@ async function updateMe(request: Request, env: CommunityEnv): Promise<Response> 
     }
     if (handle !== user.handle) {
       const taken = await env.DB.prepare("SELECT 1 FROM users WHERE handle = ?").bind(handle).first();
-      if (taken) throw new HttpError(409, "handle_taken", `@${handle} is taken — try another.`);
+      if (taken) throw new HttpError(409, "handle_taken", `@${handle} is taken. Try another.`);
     }
   }
 
@@ -344,7 +344,7 @@ async function updateMe(request: Request, env: CommunityEnv): Promise<Response> 
     } else {
       const candidate = text(body.avatar_id, 64);
       const owned = await env.DB.prepare("SELECT 1 FROM images WHERE id = ? AND user_id = ?").bind(candidate, user.id).first();
-      if (!owned) throw new HttpError(400, "bad_request", "That photo didn't upload — try again.");
+      if (!owned) throw new HttpError(400, "bad_request", "That photo didn't upload. Try again.");
       avatarId = candidate;
     }
   }
@@ -467,17 +467,17 @@ async function addFriend(request: Request, env: CommunityEnv): Promise<Response>
   const target = await env.DB.prepare("SELECT * FROM users WHERE friend_code = ? OR handle = ?")
     .bind(cleaned.toUpperCase(), cleaned.toLowerCase())
     .first<UserRow>();
-  if (!target) throw new HttpError(404, "not_found", "No one with that code or handle — check it and try again.");
+  if (!target) throw new HttpError(404, "not_found", "No one with that code or handle. Check it and try again.");
   if (target.id === user.id) throw new HttpError(400, "self", "That's you! Share your code with a friend instead.");
   if (await isBlocked(env.DB, user.id, target.id)) {
-    throw new HttpError(404, "not_found", "No one with that code or handle — check it and try again.");
+    throw new HttpError(404, "not_found", "No one with that code or handle. Check it and try again.");
   }
   if (await areFriends(env.DB, user.id, target.id)) {
     return json({ status: "friends", user: publicUser(target) });
   }
 
   const count = await env.DB.prepare("SELECT COUNT(*) AS n FROM friendships WHERE user_id = ?").bind(user.id).first<{ n: number }>();
-  if ((count?.n ?? 0) >= FRIEND_LIMIT) throw new HttpError(400, "too_many", "That's a big crew — remove someone first.");
+  if ((count?.n ?? 0) >= FRIEND_LIMIT) throw new HttpError(400, "too_many", "That's a big crew. Remove someone first.");
 
   // They already asked you: that's a yes from both sides.
   const theirRequest = await env.DB.prepare("SELECT 1 FROM friend_requests WHERE from_id = ? AND to_id = ?")
@@ -659,7 +659,7 @@ async function sendNudge(request: Request, env: CommunityEnv): Promise<Response>
     .bind(crypto.randomUUID(), user.id, to, kind, day, isoNow())
     .run();
   if (result.meta.changes === 0) {
-    throw new HttpError(409, "already_nudged", "You've already nudged them today — one's enough.");
+    throw new HttpError(409, "already_nudged", "You've already nudged them today. One's enough.");
   }
   await notify(env.DB, to, user.id, "nudge", { text: NUDGES[kind] });
   return json({ ok: true });

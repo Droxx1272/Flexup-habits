@@ -66,7 +66,7 @@ struct PhotoSection: View {
             if photos.count >= 2, let first = photos.first, let latest = photos.last {
                 FlexCard(padding: 14) {
                     VStack(alignment: .leading, spacing: 10) {
-                        Text("THEN VS NOW — \(filter.label.uppercased())")
+                        Text("THEN VS NOW · \(filter.label.uppercased())")
                             .font(.flexMono(10))
                             .tracking(2)
                             .foregroundStyle(Theme.accent)
@@ -174,7 +174,7 @@ struct PoseCaptureSheet: View {
             }
             .animation(.spring(duration: 0.25), value: pose)
 
-            Text("Match the pose. Same spot, same light, every time — that's what makes the comparison honest.")
+            Text("Match the pose. Same spot, same light, every time. That's what makes the comparison honest.")
                 .font(.flexCaption())
                 .foregroundStyle(Theme.inkSubtle)
                 .multilineTextAlignment(.center)

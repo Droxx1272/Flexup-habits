@@ -3,9 +3,11 @@
 <!--
   FlexUp privacy manifest. Keep in sync with the App Store Connect privacy
   answers and the privacy policy served at <server>/privacy.
-  Community (posts, messages, photos you share) is off in this version; when
-  FeatureFlags.community turns on, add Photos/Videos + Other User Content as
-  linked-to-identity collection for App Functionality.
+  Accounts live on the device while FeatureFlags.cloudAccounts is false, so
+  name/email/user ID are not collected. When cloud accounts turn on, add
+  Name, Email Address and User ID (linked, App Functionality). When
+  FeatureFlags.community turns on, also make Photos/Videos + Other User
+  Content linked-to-identity collection for App Functionality.
 -->
 <plist version="1.0">
 <dict>
@@ -15,43 +17,6 @@
 	<array/>
 	<key>NSPrivacyCollectedDataTypes</key>
 	<array>
-		<!-- Account: name, email, account ID. Needed to sign in; deletable in-app. -->
-		<dict>
-			<key>NSPrivacyCollectedDataType</key>
-			<string>NSPrivacyCollectedDataTypeName</string>
-			<key>NSPrivacyCollectedDataTypeLinked</key>
-			<true/>
-			<key>NSPrivacyCollectedDataTypeTracking</key>
-			<false/>
-			<key>NSPrivacyCollectedDataTypePurposes</key>
-			<array>
-				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
-			</array>
-		</dict>
-		<dict>
-			<key>NSPrivacyCollectedDataType</key>
-			<string>NSPrivacyCollectedDataTypeEmailAddress</string>
-			<key>NSPrivacyCollectedDataTypeLinked</key>
-			<true/>
-			<key>NSPrivacyCollectedDataTypeTracking</key>
-			<false/>
-			<key>NSPrivacyCollectedDataTypePurposes</key>
-			<array>
-				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
-			</array>
-		</dict>
-		<dict>
-			<key>NSPrivacyCollectedDataType</key>
-			<string>NSPrivacyCollectedDataTypeUserID</string>
-			<key>NSPrivacyCollectedDataTypeLinked</key>
-			<true/>
-			<key>NSPrivacyCollectedDataTypeTracking</key>
-			<false/>
-			<key>NSPrivacyCollectedDataTypePurposes</key>
-			<array>
-				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
-			</array>
-		</dict>
 		<!-- Meal photos + notes, only when the person asks for an AI estimate (after consent). Not stored by FlexUp, not tied to the account. -->
 		<dict>
 			<key>NSPrivacyCollectedDataType</key>

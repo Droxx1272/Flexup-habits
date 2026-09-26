@@ -39,7 +39,7 @@ async function canSee(db: D1Database, viewer: string, owner: string): Promise<bo
 async function limit(request: Request, env: CommunityEnv): Promise<void> {
   const ip = request.headers.get("cf-connecting-ip") ?? "unknown";
   const { success } = await env.IP_LIMITER.limit({ key: ip });
-  if (!success) throw new HttpError(429, "rate_limited", "Slow down a little — try again in a minute.");
+  if (!success) throw new HttpError(429, "rate_limited", "Slow down a little. Try again in a minute.");
 }
 
 function compactUser(row: { id: string; name: string; handle: string; avatar_id: string | null }) {
@@ -168,7 +168,7 @@ async function createPost(request: Request, env: CommunityEnv): Promise<Response
   let imageId: string | null = null;
   if (typeof body.image_id === "string" && body.image_id) {
     const owned = await env.DB.prepare("SELECT 1 FROM images WHERE id = ? AND user_id = ?").bind(body.image_id, user.id).first();
-    if (!owned) throw new HttpError(400, "bad_request", "That photo didn't upload — try again.");
+    if (!owned) throw new HttpError(400, "bad_request", "That photo didn't upload. Try again.");
     imageId = body.image_id;
   }
   if (!postText && !imageId) throw new HttpError(400, "bad_request", "Write something or add a photo.");

@@ -230,7 +230,7 @@ struct ActiveRunView: View {
             }
 
             if tracker.locationDenied {
-                Text("Location is off — time still counts. Enable it in Settings → Privacy to record route and distance.")
+                Text("Location is off, so only time counts. Enable it in Settings → Privacy to record route and distance.")
                     .font(.flexCaption())
                     .foregroundStyle(Theme.inkSubtle)
                     .multilineTextAlignment(.center)

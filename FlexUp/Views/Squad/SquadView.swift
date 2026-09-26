@@ -93,7 +93,7 @@ struct SquadView: View {
             ProgressView(value: Double(min(total, goal)), total: Double(goal))
                 .tint(Theme.accent)
             Text(total >= goal
-                 ? "Weekly goal hit. Celebrate it — then reset it."
+                 ? "Weekly goal hit. Celebrate it. Then reset it."
                  : "\(goal - total) more to this week's crew goal of \(goal). Yours count double to you.")
                 .font(.flexCaption())
                 .foregroundStyle(Theme.inkSubtle)

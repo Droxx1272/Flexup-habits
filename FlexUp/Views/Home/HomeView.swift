@@ -134,7 +134,7 @@ struct HomeView: View {
         if total == 0 { return "Nothing planned yet. Keep it light or add one thing." }
         if done == total { return "All done. Go live your life." }
         if done == 0 { return "\(total) commitment\(total == 1 ? "" : "s") waiting. Start with the easiest." }
-        return "\(done) of \(total) done — keep the thread going."
+        return "\(done) of \(total) done. Keep the thread going."
     }
 
     // MARK: Coach
