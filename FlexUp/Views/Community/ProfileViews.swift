@@ -11,7 +11,7 @@ struct MyProfileView: View {
     var body: some View {
         Group {
             if let me = store.community.me, store.community.isSignedIn {
-                ProfileView(userID: me.id)
+                MemberProfileView(userID: me.id)
             } else {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 18) {
@@ -54,7 +54,7 @@ struct MyProfileView: View {
 /// Anyone's profile: photo, name, handle, location, who they're becoming,
 /// their goal, this month's proof, and their posts. Yours has Edit, a
 /// camera badge on the photo, and your settings.
-struct ProfileView: View {
+struct MemberProfileView: View {
     @Environment(AppStore.self) private var store
     let userID: String
 

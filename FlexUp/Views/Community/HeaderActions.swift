@@ -93,7 +93,7 @@ extension View {
     func communityDestinations() -> some View {
         navigationDestination(for: CommunityDestination.self) { destination in
             switch destination {
-            case .profile(let userID): ProfileView(userID: userID)
+            case .profile(let userID): MemberProfileView(userID: userID)
             case .post(let post): PostDetailView(post: post)
             case .postID(let postID): PostDetailView(postID: postID)
             case .chat(let user): ChatView(user: user)
