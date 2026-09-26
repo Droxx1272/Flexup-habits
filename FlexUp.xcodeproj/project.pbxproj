@@ -258,12 +258,14 @@
 				INFOPLIST_KEY_NSCameraUsageDescription = "FlexUp uses the camera for progress photos and photo-verified check-ins. Photos stay on your device.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "FlexUp uses the microphone so you can speak corrections to a meal estimate instead of typing them.";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "FlexUp turns your spoken meal corrections into text so the calorie estimate can account for them.";
-				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "FlexUp uses your location to measure distance and pace during an active run. It is never used in the background.";
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.healthcare-fitness";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "FlexUp uses your location to measure distance, pace and your route while you record a run, including when your screen is locked. It is never used when you are not recording.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = UIInterfaceOrientationPortrait;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -274,7 +276,7 @@
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
+				TARGETED_DEVICE_FAMILY = 1;
 			};
 			name = Debug;
 		};
@@ -292,12 +294,14 @@
 				INFOPLIST_KEY_NSCameraUsageDescription = "FlexUp uses the camera for progress photos and photo-verified check-ins. Photos stay on your device.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "FlexUp uses the microphone so you can speak corrections to a meal estimate instead of typing them.";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "FlexUp turns your spoken meal corrections into text so the calorie estimate can account for them.";
-				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "FlexUp uses your location to measure distance and pace during an active run. It is never used in the background.";
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.healthcare-fitness";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "FlexUp uses your location to measure distance, pace and your route while you record a run, including when your screen is locked. It is never used when you are not recording.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = UIInterfaceOrientationPortrait;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -308,7 +312,7 @@
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
+				TARGETED_DEVICE_FAMILY = 1;
 			};
 			name = Release;
 		};

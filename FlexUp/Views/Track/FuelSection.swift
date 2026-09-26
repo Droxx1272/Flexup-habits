@@ -635,6 +635,7 @@ struct AddFoodSheet: View {
     @State private var items: [FoodItem] = []
     @State private var correction = ""
     @State private var showContextEditor = false
+    @State private var showAIConsent = false
     @State private var dictation = VoiceDictation()
 
     /// Hand-entered macros. Optional — calories alone are still a valid log.
@@ -755,6 +756,11 @@ struct AddFoodSheet: View {
         .sheet(isPresented: $showLibrary) {
             LibraryPicker { image in
                 photoData = image.flexJPEGData()
+            }
+        }
+        .sheet(isPresented: $showAIConsent) {
+            AIConsentSheet {
+                runEstimate()
             }
         }
         .sheet(isPresented: $showContextEditor) {
@@ -940,6 +946,10 @@ struct AddFoodSheet: View {
                 .background(Theme.accentSoft)
                 .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
             }
+
+            Text("AI estimates are approximate and not medical or nutrition advice. Adjust anything that looks off.")
+                .font(.flexCaption())
+                .foregroundStyle(Theme.inkSubtle)
 
             if let estimateNote {
                 Text(estimateNote)
@@ -1302,6 +1312,10 @@ struct AddFoodSheet: View {
 
     private func runEstimate() {
         guard let photoData, let image = UIImage(data: photoData) else { return }
+        guard store.aiPhotoConsent == true else {
+            showAIConsent = true
+            return
+        }
 
         dictation.stop()
         estimating = true

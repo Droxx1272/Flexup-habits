@@ -85,6 +85,7 @@ enum CommunityDestination: Hashable {
     case crew
     case notificationSettings
     case blocked
+    case privacy
 }
 
 extension View {
@@ -100,6 +101,7 @@ extension View {
             case .crew: CrewView()
             case .notificationSettings: NotificationSettingsView()
             case .blocked: BlockedUsersView()
+            case .privacy: PrivacyDataView()
             }
         }
     }

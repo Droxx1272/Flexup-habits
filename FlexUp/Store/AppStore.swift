@@ -34,6 +34,9 @@ final class AppStore {
     /// Outcomes and weekly targets, asked right after sign-up.
     var goals = UserGoals()
     var reminders = ReminderPreferences()
+    /// Permission to send meal photos to the AI estimator (App Store 5.1.2(i)).
+    /// nil = never asked, so the app asks before the first estimate.
+    var aiPhotoConsent: Bool?
 
     /// Friends, cheers and nudges — the part of the app that lives on the
     /// FlexUp server. Reached as `store.community` so state still has one home.
@@ -105,6 +108,11 @@ final class AppStore {
         reminders = preferences
         save()
         updateHabitReminders()
+    }
+
+    func setAIPhotoConsent(_ allowed: Bool) {
+        aiPhotoConsent = allowed
+        save()
     }
 
     func setWakeAlarm(_ enabled: Bool) {
@@ -1700,6 +1708,7 @@ final class AppStore {
         var sharing: SharingSettings?
         var goals: UserGoals?
         var reminders: ReminderPreferences?
+        var aiPhotoConsent: Bool?
         var moodByDay: [String: String]
         var chats: [UUID: [ChatMessage]]
     }
@@ -1745,6 +1754,7 @@ final class AppStore {
             sharing: sharing,
             goals: goals,
             reminders: reminders,
+            aiPhotoConsent: aiPhotoConsent,
             moodByDay: moodByDay,
             chats: chats
         )
@@ -1788,6 +1798,7 @@ final class AppStore {
         sharing = snapshot.sharing ?? SharingSettings()
         goals = snapshot.goals ?? UserGoals()
         reminders = snapshot.reminders ?? ReminderPreferences()
+        aiPhotoConsent = snapshot.aiPhotoConsent
         cuisineContext = snapshot.cuisineContext ?? ""
         wake = snapshot.wake ?? WakeConfig()
         wakeCheckInDays = snapshot.wakeCheckInDays ?? []

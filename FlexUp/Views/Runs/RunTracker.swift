@@ -36,6 +36,16 @@ final class RunTracker: NSObject, CLLocationManagerDelegate {
         manager.desiredAccuracy = kCLLocationAccuracyBest
         manager.activityType = .fitness
         manager.distanceFilter = 5
+        // Keep recording when the screen locks mid-run. Only safe when the
+        // app declares the "location" background mode (Xcode → Signing &
+        // Capabilities → Background Modes → Location updates); setting this
+        // without it crashes, so check first.
+        let modes = Bundle.main.object(forInfoDictionaryKey: "UIBackgroundModes") as? [String] ?? []
+        if modes.contains("location") {
+            manager.allowsBackgroundLocationUpdates = true
+            manager.showsBackgroundLocationIndicator = true
+            manager.pausesLocationUpdatesAutomatically = false
+        }
     }
 
     func start() {

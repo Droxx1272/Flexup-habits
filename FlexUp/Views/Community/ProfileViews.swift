@@ -54,6 +54,25 @@ struct MyProfileView: View {
                                 .contentShape(Rectangle())
                             }
                             .buttonStyle(.plain)
+                            Divider().padding(.leading, 50)
+                            NavigationLink(value: CommunityDestination.privacy) {
+                                HStack(spacing: 14) {
+                                    Image(systemName: "hand.raised")
+                                        .font(.system(size: 15, weight: .semibold))
+                                        .foregroundStyle(Theme.accent)
+                                        .frame(width: 22)
+                                    Text("Privacy & data")
+                                        .font(.flexBody())
+                                        .foregroundStyle(Theme.ink)
+                                    Spacer()
+                                    Image(systemName: "chevron.right")
+                                        .font(.system(size: 11, weight: .bold))
+                                        .foregroundStyle(Theme.inkSubtle)
+                                }
+                                .padding(14)
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
                         }
                         .background(Theme.card)
                         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
@@ -403,7 +422,9 @@ struct MemberProfileView: View {
             Divider().padding(.leading, 50)
             linkRow(.notificationSettings, icon: "bell.badge", title: "Notifications", badge: 0)
             Divider().padding(.leading, 50)
-            linkRow(.blocked, icon: "hand.raised", title: "Blocked people", badge: 0)
+            linkRow(.blocked, icon: "person.crop.circle.badge.xmark", title: "Blocked people", badge: 0)
+            Divider().padding(.leading, 50)
+            linkRow(.privacy, icon: "hand.raised", title: "Privacy & data", badge: 0)
         }
         .background(Theme.card)
         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))

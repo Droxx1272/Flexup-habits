@@ -15,4 +15,10 @@ enum BackendConfig {
     }
 
     static var isConfigured: Bool { baseURL != nil }
+
+    /// Legal pages served by the same Worker (see `backend/src/legal.ts`).
+    /// Use these URLs in App Store Connect too.
+    static var privacyPolicyURL: URL? { baseURL?.appendingPathComponent("privacy") }
+    static var termsURL: URL? { baseURL?.appendingPathComponent("terms") }
+    static var supportURL: URL? { baseURL?.appendingPathComponent("support") }
 }

@@ -4,6 +4,7 @@ import { CHALLENGE_TTL_SECONDS, checkChallenge, issueChallenge } from "./challen
 import { communityRoutes, type CommunityEnv, type Params } from "./community";
 import { EstimateMalformedError, EstimateRefusedError, estimateMeal, type ImageMediaType } from "./estimate";
 import { HttpError, fail, json, parseJson, readBody as readLimitedBody } from "./http";
+import { privacyPage, supportPage, termsPage, type LegalEnv } from "./legal";
 import { socialRoutes } from "./social";
 
 /**
@@ -26,7 +27,7 @@ import { socialRoutes } from "./social";
  * (fetch a new challenge, retry once); every message is shown as-is.
  */
 
-export interface Env extends CommunityEnv {
+export interface Env extends CommunityEnv, LegalEnv {
   ANTHROPIC_API_KEY: string;
   /** Signs challenges. `openssl rand -hex 32 | npx wrangler secret put CHALLENGE_SECRET` */
   CHALLENGE_SECRET: string;
@@ -288,6 +289,12 @@ function match(method: string, pathname: string): { handler?: Handler; params: P
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const { pathname } = new URL(request.url);
+
+    if (request.method === "GET") {
+      if (pathname === "/privacy") return privacyPage(env);
+      if (pathname === "/terms") return termsPage(env);
+      if (pathname === "/support" || pathname === "/") return supportPage(env);
+    }
 
     if (pathname === "/health" && request.method === "GET") {
       return json({ ok: true, attestation: attestationOn(env) ? "required" : "off" });

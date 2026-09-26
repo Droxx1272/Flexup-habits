@@ -19,7 +19,9 @@
     // Builds run from Xcode attest in Apple's development environment. Set to
     // "false" once every user is on an App Store / TestFlight build with the
     // App Attest capability set to production.
-    "ALLOW_DEVELOPMENT_ATTESTATION": "true"
+    "ALLOW_DEVELOPMENT_ATTESTATION": "true",
+    // Shown on /privacy, /terms and /support. Use an inbox you check.
+    "SUPPORT_EMAIL": ""
   },
 
   // One small record per install (its public key). Created automatically
