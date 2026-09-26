@@ -49,7 +49,7 @@ struct MainTabView: View {
         .tint(Theme.accent)
         // Keeps the header's chat / bell counts current while the app is open.
         .task(id: store.community.isSignedIn) {
-            while store.community.isSignedIn && !Task.isCancelled {
+            while FeatureFlags.community && store.community.isSignedIn && !Task.isCancelled {
                 await store.community.refreshBadges()
                 try? await Task.sleep(for: .seconds(60))
             }

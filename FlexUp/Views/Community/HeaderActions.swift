@@ -15,7 +15,7 @@ struct HeaderActions: View {
 
     var body: some View {
         HStack(spacing: 16) {
-            if community.isSignedIn {
+            if FeatureFlags.community && community.isSignedIn {
                 iconButton("bubble.left.and.bubble.right", count: community.badges.messages, label: "Messages") {
                     route = .messages
                 }

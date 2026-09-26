@@ -69,9 +69,9 @@ struct AuthView: View {
                             .multilineTextAlignment(.center)
                     }
 
-                    Text(BackendConfig.isConfigured
+                    Text(BackendConfig.isConfigured && FeatureFlags.community
                          ? "YOUR LOGS STAY ON YOUR PHONE. FRIENDS SEE ONLY WHAT YOU SHARE."
-                         : "YOUR DATA STAYS ON YOUR DEVICE.")
+                         : "YOUR LOGS STAY ON YOUR PHONE.")
                         .font(.flexMono(9))
                         .tracking(1.5)
                         .foregroundStyle(Theme.inkSubtle)

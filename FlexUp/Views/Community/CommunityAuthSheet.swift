@@ -28,7 +28,7 @@ struct AccountPage: View {
                         RoundedRectangle(cornerRadius: 2)
                             .fill(Theme.accent)
                             .frame(width: 22, height: 3)
-                        Text(mode == .create ? "ONE ACCOUNT FOR YOU AND YOUR CREW." : "PICK UP WHERE YOU LEFT OFF.")
+                        Text(mode == .create ? "WAKE. RUN. LIFT. FUEL." : "PICK UP WHERE YOU LEFT OFF.")
                             .font(.flexMono(11))
                             .tracking(2)
                             .foregroundStyle(Theme.inkSubtle)
@@ -131,7 +131,10 @@ struct AccountForm: View {
     private var canSubmit: Bool {
         guard emailValid, !isWorking else { return false }
         if mode == .login { return !password.isEmpty }
-        return password.count >= 8 && !name.trimmingCharacters(in: .whitespaces).isEmpty && agreed
+        // The guidelines agreement only exists while community (posts,
+        // messages) ships; accounts alone don't need it.
+        return password.count >= 8 && !name.trimmingCharacters(in: .whitespaces).isEmpty
+            && (agreed || !FeatureFlags.community)
     }
 
     var body: some View {
@@ -154,7 +157,7 @@ struct AccountForm: View {
                     .textContentType(mode == .create ? .newPassword : .password)
             }
 
-            if mode == .create {
+            if mode == .create && FeatureFlags.community {
                 Button {
                     agreed.toggle()
                 } label: {

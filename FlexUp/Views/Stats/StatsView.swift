@@ -268,7 +268,7 @@ struct StatsSection: View {
             }
             Button("Keep my account", role: .cancel) {}
         } message: {
-            Text("This permanently removes your account, friends, and everything you've shared. Logs stored only on this phone stay here.")
+            Text("This permanently removes your FlexUp account and everything stored with it on our server. Logs kept only on this phone stay here.")
         }
     }
 

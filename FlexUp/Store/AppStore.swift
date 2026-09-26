@@ -139,7 +139,7 @@ final class AppStore {
 
     /// Hand a real, just-logged activity to friends, if that pillar is shared.
     private func shareWithFriends(_ kind: ActivityKind, title: String, detail: String = "", streak: Int? = nil) {
-        guard sharing.allows(kind) else { return }
+        guard FeatureFlags.community, sharing.allows(kind) else { return }
         community.share(PendingActivity(
             kind: kind,
             title: title,

@@ -175,7 +175,7 @@ struct OnboardingView: View {
 
     /// The profile step only makes sense with a FlexUp account.
     private var activeSteps: [Step] {
-        Step.allCases.filter { $0 != .profile || store.community.isSignedIn }
+        Step.allCases.filter { $0 != .profile || (FeatureFlags.community && store.community.isSignedIn) }
     }
 
     private var progressFraction: CGFloat {
@@ -244,7 +244,7 @@ struct OnboardingView: View {
         }
 
         // Profile bits friends see.
-        guard store.community.isSignedIn else { return }
+        guard FeatureFlags.community, store.community.isSignedIn else { return }
         let community = store.community
         let headline = goals.focuses.prefix(2).map(\.label).joined(separator: " · ")
         let prefs = crewPrefs
@@ -677,7 +677,7 @@ struct OnboardingView: View {
             .background(Theme.card)
             .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
 
-            if store.community.isSignedIn {
+            if FeatureFlags.community && store.community.isSignedIn {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("FROM YOUR CREW")
                         .font(.flexMono(10))

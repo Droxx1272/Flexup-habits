@@ -10,7 +10,7 @@ struct MyProfileView: View {
 
     var body: some View {
         Group {
-            if let me = store.community.me, store.community.isSignedIn {
+            if FeatureFlags.community, let me = store.community.me, store.community.isSignedIn {
                 MemberProfileView(userID: me.id)
             } else {
                 ScrollView {
@@ -27,7 +27,42 @@ struct MyProfileView: View {
                                     .foregroundStyle(Theme.accent)
                             }
                         }
-                        CommunityGateView()
+                        if let email = store.account?.email {
+                            Label(email, systemImage: store.account?.provider == .apple ? "apple.logo" : "envelope")
+                                .font(.flexCaption())
+                                .foregroundStyle(Theme.inkSubtle)
+                        }
+
+                        weekSummary
+
+                        VStack(spacing: 0) {
+                            NavigationLink(value: CommunityDestination.notificationSettings) {
+                                HStack(spacing: 14) {
+                                    Image(systemName: "bell.badge")
+                                        .font(.system(size: 15, weight: .semibold))
+                                        .foregroundStyle(Theme.accent)
+                                        .frame(width: 22)
+                                    Text("Notifications & reminders")
+                                        .font(.flexBody())
+                                        .foregroundStyle(Theme.ink)
+                                    Spacer()
+                                    Image(systemName: "chevron.right")
+                                        .font(.system(size: 11, weight: .bold))
+                                        .foregroundStyle(Theme.inkSubtle)
+                                }
+                                .padding(14)
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                        }
+                        .background(Theme.card)
+                        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+
+                        if FeatureFlags.community {
+                            CommunityGateView()
+                        } else {
+                            ComingSoonCommunity()
+                        }
                     }
                     .padding(20)
                 }
@@ -42,8 +77,36 @@ struct MyProfileView: View {
             }
         }
         .task {
-            if store.community.isSignedIn && store.community.me == nil {
+            if FeatureFlags.community && store.community.isSignedIn && store.community.me == nil {
                 await store.community.refresh(day: store.todayKey)
+            }
+        }
+    }
+
+    /// Goals from onboarding and how this week is going against them.
+    private var weekSummary: some View {
+        let week = store.weekProgress
+        let focuses = store.goals.focuses
+        return FlexCard(padding: 16) {
+            VStack(alignment: .leading, spacing: 12) {
+                if !focuses.isEmpty {
+                    Text("GOALS")
+                        .font(.flexMono(10))
+                        .tracking(2)
+                        .foregroundStyle(Theme.inkSubtle)
+                    Text(focuses.map(\.label).joined(separator: " · "))
+                        .font(.flexBodyBold())
+                        .foregroundStyle(Theme.ink)
+                }
+                HStack(spacing: 8) {
+                    TrackStat(value: "\(week.wakeUps)/\(week.wakeDays)", label: "Wake-ups")
+                    TrackStat(value: "\(week.runs)/\(store.goals.runsPerWeek)", label: "Runs")
+                    TrackStat(value: "\(week.workouts)/\(store.goals.gymPerWeek)", label: "Sessions")
+                }
+                Text("THIS WEEK")
+                    .font(.flexMono(8))
+                    .tracking(1.5)
+                    .foregroundStyle(Theme.inkSubtle)
             }
         }
     }
@@ -563,7 +626,7 @@ struct NotificationSettingsView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
-                if store.community.isSignedIn {
+                if FeatureFlags.community && store.community.isSignedIn {
                     group("From your crew", note: "Shown in the bell. Lock-screen alerts for these arrive with push notifications in a later update.") {
                         toggle("Friend requests", icon: "person.badge.plus", isOn: $prefs.friends)
                         toggle("Nudges", icon: "hand.wave", isOn: $prefs.nudges)

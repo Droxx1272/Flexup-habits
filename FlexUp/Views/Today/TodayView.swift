@@ -43,7 +43,11 @@ struct TodayView: View {
                         commitmentsSection
                         planRow
                     case .community:
-                        CommunitySection()
+                        if FeatureFlags.community {
+                            CommunitySection()
+                        } else {
+                            ComingSoonCommunity()
+                        }
                     case .progress:
                         ProgressSection()
                     case .stats:
@@ -57,11 +61,11 @@ struct TodayView: View {
             .background(Theme.background)
             .toolbar(.hidden, for: .navigationBar)
             .refreshable {
-                await store.community.refresh(day: store.todayKey)
+                if FeatureFlags.community { await store.community.refresh(day: store.todayKey) }
             }
             .communityDestinations()
             .task {
-                await store.community.refresh(day: store.todayKey)
+                if FeatureFlags.community { await store.community.refresh(day: store.todayKey) }
             }
             .sheet(item: $selectedCommitment) { commitment in
                 CommitmentDetailSheet(commitment: commitment)
@@ -154,7 +158,7 @@ struct TodayView: View {
     /// Nudges from friends surface where the day's work is, not buried a tab away.
     @ViewBuilder
     private var crewBanner: some View {
-        let nudges = store.community.nudges
+        let nudges = FeatureFlags.community ? store.community.nudges : []
         if let first = nudges.first {
             Button {
                 withAnimation(.spring(duration: 0.25)) { section = .community }
