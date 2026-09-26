@@ -27,7 +27,7 @@ Plan → Commit → Do → Verify → Celebrate → Repeat
 2. Select the FlexUp scheme and any iOS 17+ simulator or device.
 3. Build and run. First launch walks through onboarding and seeds a local "world" of nearby activities, friends, and communities so every screen is alive.
 
-No dependencies, no packages, no account — everything is local in v1.
+No dependencies, no packages, no account — everything is local in v1. The one server piece is the optional AI-estimate proxy in `backend/` (see its README).
 
 ## App structure
 
@@ -52,7 +52,7 @@ Snap a plate and Claude Haiku 4.5 vision returns an **itemised** estimate — ca
 - **Correct it by voice or text.** Say or type "cooked in mustard oil, only two rotis" and re-estimate; the correction is passed to the model as authoritative. Hand-added ingredients survive the re-run.
 - **Teach it your kitchen once.** A persisted cuisine context ("North Indian home cooking, mustard oil, moderate ghee") ships with every request, so regional and mixed dishes stop being scored against Western database equivalents. 21 presets, or write your own.
 
-Bring-your-own API key in v1; a backend proxy replaces it before release.
+The app never holds an Anthropic key: photos go to a small Cloudflare Worker in [`backend/`](backend/README.md) that holds the key, owns the prompt, rate-limits per install, and returns the itemised estimate (about $0.004–0.005 per photo). Setup is about 10 minutes; until the Worker URL is set in `FlexUp/Support/BackendConfig.swift`, the app says AI estimates aren't switched on and you log by hand.
 
 Discover, Squad (social feed + memories), Calendar, Activity detail, and the coach remain in the codebase but out of the nav — the navigation stays simple until the pillars are solid.
 

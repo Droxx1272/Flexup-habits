@@ -86,6 +86,7 @@ final class AppStore {
         refreshDiscoverFeed()
         rolloverMissed()
         generateUpcomingCommitments()
+        removeLegacyAPIKey()
         save()
     }
 
@@ -1686,11 +1687,10 @@ final class AppStore {
 
     // MARK: - AI
 
-    /// Anthropic API key for the calorie estimator. Prototype-only storage:
-    /// lives in UserDefaults on this device. Before any public release this
-    /// moves to a backend proxy so no key ships in the app.
-    var anthropicAPIKey: String {
-        get { UserDefaults.standard.string(forKey: "anthropicAPIKey") ?? "" }
-        set { UserDefaults.standard.set(newValue, forKey: "anthropicAPIKey") }
+    /// Earlier prototypes stored an Anthropic key on the device. Estimates
+    /// now go through the FlexUp server (`BackendConfig`), so wipe any key
+    /// an old build left behind.
+    private func removeLegacyAPIKey() {
+        UserDefaults.standard.removeObject(forKey: "anthropicAPIKey")
     }
 }

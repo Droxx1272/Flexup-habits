@@ -1,0 +1,19 @@
+// FlexUp API — a thin proxy so the Anthropic key never ships in the app.
+// Deploy: `npm run deploy`. Set the key once: `npx wrangler secret put ANTHROPIC_API_KEY`.
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "flexup-api",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-09-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": { "enabled": true },
+
+  // Abuse brakes. The hard ceiling on spend is the monthly limit you set in
+  // the Claude Console — these just stop one device or IP from burning it.
+  "ratelimits": [
+    // Per app install: a meal plus a couple of re-estimates is ~3 calls.
+    { "name": "INSTALL_LIMITER", "namespace_id": "1001", "simple": { "limit": 8, "period": 60 } },
+    // Per IP: allows a household or office sharing one connection.
+    { "name": "IP_LIMITER", "namespace_id": "1002", "simple": { "limit": 30, "period": 60 } }
+  ]
+}

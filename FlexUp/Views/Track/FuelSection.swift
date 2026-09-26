@@ -629,7 +629,6 @@ struct AddFoodSheet: View {
     @State private var estimating = false
     @State private var estimateNote: String?
     @State private var estimateError: String?
-    @State private var showKeyEntry = false
 
     /// Non-empty once a photo has been estimated — switches the sheet from
     /// manual entry into the itemised review where portions get corrected.
@@ -758,11 +757,6 @@ struct AddFoodSheet: View {
                 photoData = image.flexJPEGData()
             }
         }
-        .sheet(isPresented: $showKeyEntry) {
-            APIKeySheet {
-                runEstimate()
-            }
-        }
         .sheet(isPresented: $showContextEditor) {
             CuisineContextSheet()
         }
@@ -817,24 +811,38 @@ struct AddFoodSheet: View {
                         .padding(10)
                     }
 
-                    Button {
-                        runEstimate()
-                    } label: {
-                        HStack(spacing: 8) {
-                            if estimating {
-                                ProgressView().controlSize(.small)
-                            } else {
-                                Image(systemName: "sparkles")
+                    if BackendConfig.isConfigured {
+                        Button {
+                            runEstimate()
+                        } label: {
+                            HStack(spacing: 8) {
+                                if estimating {
+                                    ProgressView().controlSize(.small)
+                                } else {
+                                    Image(systemName: "sparkles")
+                                }
+                                Text(estimating
+                                     ? "Estimating…"
+                                     : (isReviewing ? "Re-estimate with corrections" : "Estimate calories with AI"))
                             }
-                            Text(estimating
-                                 ? "Estimating…"
-                                 : (isReviewing ? "Re-estimate with corrections" : "Estimate calories with AI"))
                         }
-                    }
-                    .buttonStyle(SecondaryButtonStyle(tint: Theme.accent, background: Theme.accentSoft))
-                    .disabled(estimating)
+                        .buttonStyle(SecondaryButtonStyle(tint: Theme.accent, background: Theme.accentSoft))
+                        .disabled(estimating)
 
-                    cuisineRow
+                        cuisineRow
+
+                        if !isReviewing, let estimateError {
+                            Text(estimateError)
+                                .font(.flexCaption())
+                                .foregroundStyle(Theme.danger)
+                        }
+                    } else {
+                        // Honest label: the photo still saves with the entry,
+                        // but no AI runs until the server is connected.
+                        Text("AI estimates aren't switched on in this build yet — the photo is saved with your entry. Add the calories below.")
+                            .font(.flexCaption())
+                            .foregroundStyle(Theme.inkSubtle)
+                    }
                 }
             } else {
                 Button {
@@ -1294,17 +1302,12 @@ struct AddFoodSheet: View {
 
     private func runEstimate() {
         guard let photoData, let image = UIImage(data: photoData) else { return }
-        guard !store.anthropicAPIKey.isEmpty else {
-            showKeyEntry = true
-            return
-        }
 
         dictation.stop()
         estimating = true
         estimateError = nil
         estimateNote = nil
 
-        let apiKey = store.anthropicAPIKey
         let context = store.cuisineContext
         let note = correction
         // Anything the user added by hand survives a re-estimate — they
@@ -1315,7 +1318,6 @@ struct AddFoodSheet: View {
             do {
                 let estimate = try await CalorieEstimator.estimate(
                     image: image,
-                    apiKey: apiKey,
                     cuisineContext: context,
                     correction: note
                 )
@@ -1406,65 +1408,6 @@ struct CuisineContextSheet: View {
         .background(Theme.background)
         .presentationDetents([.large])
         .onAppear { text = store.cuisineContext }
-    }
-}
-
-// MARK: - API key entry
-
-/// One-time setup for the AI estimator. The key stays on this device —
-/// a backend proxy replaces this before any public release.
-struct APIKeySheet: View {
-    var onSaved: () -> Void
-    @Environment(AppStore.self) private var store
-    @Environment(\.dismiss) private var dismiss
-    @State private var key = ""
-
-    var body: some View {
-        VStack(spacing: 16) {
-            Capsule()
-                .fill(Theme.inkSubtle.opacity(0.3))
-                .frame(width: 36, height: 5)
-                .padding(.top, 10)
-
-            Image(systemName: "sparkles")
-                .font(.system(size: 30))
-                .foregroundStyle(Theme.accent)
-                .padding(.top, 8)
-
-            Text("SET UP AI ESTIMATES")
-                .font(.flexMono(12))
-                .tracking(2)
-                .foregroundStyle(Theme.ink)
-
-            Text("Paste an Anthropic API key (console.anthropic.com → API Keys). It's stored only on this phone and each estimate costs a fraction of a cent.")
-                .font(.flexCaption())
-                .foregroundStyle(Theme.inkSubtle)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, 24)
-
-            SecureField("sk-ant-…", text: $key)
-                .font(.flexBodyBold())
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
-                .padding(14)
-                .background(Theme.card)
-                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                .padding(.horizontal, 20)
-
-            Button("Save & estimate") {
-                store.anthropicAPIKey = key.trimmingCharacters(in: .whitespacesAndNewlines)
-                dismiss()
-                onSaved()
-            }
-            .buttonStyle(PrimaryButtonStyle())
-            .disabled(key.trimmingCharacters(in: .whitespaces).isEmpty)
-            .opacity(key.trimmingCharacters(in: .whitespaces).isEmpty ? 0.4 : 1)
-            .padding(.horizontal, 20)
-
-            Spacer()
-        }
-        .background(Theme.background)
-        .presentationDetents([.medium])
     }
 }
 
