@@ -2,8 +2,9 @@ import SwiftUI
 import UIKit
 
 /// Do → Verify. Timer verification runs a real countdown; photo verification
-/// opens the camera and files the shot as a check-in; partner and GPS fall
-/// back to honor in v1 and say so honestly.
+/// opens the camera and files the shot as a check-in; GPS means recording
+/// the run in the Run tab, which completes it. Partner commitments from
+/// older builds complete on honor until friends ship.
 struct CommitmentDetailSheet: View {
     @Environment(AppStore.self) private var store
     @Environment(\.dismiss) private var dismiss
@@ -40,8 +41,8 @@ struct CommitmentDetailSheet: View {
                 StatusPill(status: live.status)
             }
 
-            if needsFallbackNote {
-                Text("\(live.verification.label) verification arrives with the FlexUp backend. Completing on honor for now.")
+            if needsRunNote {
+                Text("Record this run in the Run tab. Finishing it checks this off with your GPS route as proof.")
                     .font(.flexCaption())
                     .foregroundStyle(Theme.inkSubtle)
                     .multilineTextAlignment(.center)
@@ -69,6 +70,14 @@ struct CommitmentDetailSheet: View {
                         Label("Take photo to complete", systemImage: "camera")
                     }
                     .buttonStyle(PrimaryButtonStyle())
+                } else if live.verification == .location && live.category == .run {
+                    Label("Waiting for your run", systemImage: "location")
+                        .font(.flexBodyBold())
+                        .foregroundStyle(Theme.accent)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 14)
+                        .background(Theme.accentSoft)
+                        .clipShape(Capsule())
                 } else {
                     Button("Mark completed") {
                         store.complete(live)
@@ -134,9 +143,9 @@ struct CommitmentDetailSheet: View {
         dismiss()
     }
 
-    private var needsFallbackNote: Bool {
-        live.status != .completed &&
-        (live.verification == .partner || live.verification == .location)
+    private var needsRunNote: Bool {
+        live.status != .completed && live.status != .missed
+            && live.verification == .location && live.category == .run
     }
 }
 

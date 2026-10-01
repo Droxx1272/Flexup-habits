@@ -75,4 +75,5 @@ FlexUp is a habit and accountability app for four daily pillars: Wake, Run, Gym,
 
 ## Known review risk
 
-- **"Coming soon" Community card.** Apple sometimes rejects placeholder features (guideline 2.1). If that happens, remove the Community segment instead: hide it in `TodayView` behind `FeatureFlags.community`, which is a one-line change.
+- **Login for an on-device account (guideline 5.1.1(v)).** Apple asks apps without significant account-based features to work without a login. Accounts are local while `FeatureFlags.cloudAccounts` is off, so a reviewer may ask why sign-in is required. Answer in the review notes (the account keeps one phone's logs separate per person and lets them log out), or add a "Continue without an account" path if it's rejected.
+- Placeholder features: none in 1.0. Community is hidden entirely, and every verification method offered actually verifies.

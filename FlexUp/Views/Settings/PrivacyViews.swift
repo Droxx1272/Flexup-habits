@@ -85,6 +85,8 @@ struct PrivacyDataView: View {
     @Environment(\.openURL) private var openURL
     @State private var confirmDelete = false
     @State private var deleteError: String?
+    /// Fresh export file, written when the screen opens.
+    @State private var exportURL: URL?
 
     var body: some View {
         ScrollView {
@@ -117,13 +119,39 @@ struct PrivacyDataView: View {
                     .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
                 }
 
+                VStack(alignment: .leading, spacing: 8) {
+                    SectionHeader(title: "Your data", subtitle: "A copy of everything you've logged, as a JSON file you can keep or move.")
+                    if let exportURL {
+                        ShareLink(item: exportURL) {
+                            HStack(spacing: 14) {
+                                Image(systemName: "square.and.arrow.up")
+                                    .font(.system(size: 15, weight: .semibold))
+                                    .foregroundStyle(Theme.accent)
+                                    .frame(width: 22)
+                                Text("Export my data")
+                                    .font(.flexBody())
+                                    .foregroundStyle(Theme.ink)
+                                Spacer()
+                            }
+                            .padding(14)
+                            .background(Theme.card)
+                            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                        }
+                        .buttonStyle(.plain)
+                    } else {
+                        Text("Couldn't prepare the export. Try again later.")
+                            .font(.flexCaption())
+                            .foregroundStyle(Theme.inkSubtle)
+                    }
+                }
+
                 if BackendConfig.isConfigured {
                     VStack(spacing: 0) {
                         linkRow("Privacy policy", icon: "hand.raised", url: BackendConfig.privacyPolicyURL)
                         Divider().padding(.leading, 50)
                         linkRow("Terms of use", icon: "doc.text", url: BackendConfig.termsURL)
                         Divider().padding(.leading, 50)
-                        linkRow("Help & support", icon: "questionmark.circle", url: BackendConfig.supportURL)
+                        linkRow("Help and support", icon: "questionmark.circle", url: BackendConfig.supportURL)
                     }
                     .background(Theme.card)
                     .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
@@ -146,6 +174,9 @@ struct PrivacyDataView: View {
         .background(Theme.background)
         .navigationTitle("Privacy & data")
         .navigationBarTitleDisplayMode(.inline)
+        .onAppear {
+            exportURL = try? store.exportData()
+        }
         .confirmationDialog("Delete your FlexUp account?", isPresented: $confirmDelete, titleVisibility: .visible) {
             Button("Delete account", role: .destructive) {
                 Task { @MainActor in

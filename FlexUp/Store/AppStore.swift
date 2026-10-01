@@ -31,6 +31,9 @@ final class AppStore {
     var waterByDay: [String: Int] = [:]
     /// The paged introduction runs once, before sign-in.
     var hasSeenIntro = false
+    /// Who used this phone last. Kept after logging out so a different
+    /// account can be asked before seeing their logs.
+    var lastAccountID: String?
     /// Which pillars friends see in their feed.
     var sharing = SharingSettings()
     /// Outcomes and weekly targets, asked right after sign-up.
@@ -81,7 +84,16 @@ final class AppStore {
 
     func signIn(_ account: Account) {
         self.account = account
+        lastAccountID = account.userID
         save()
+    }
+
+    /// Accounts live on the phone, so logs belong to whoever used it last.
+    /// True when someone else's logs are here and a different account is
+    /// about to sign in.
+    func holdsAnotherAccountsData(_ account: Account) -> Bool {
+        guard profile != nil, let lastAccountID else { return false }
+        return lastAccountID != account.userID
     }
 
     /// Signing out gates the app behind login again. Local data stays on
@@ -107,7 +119,9 @@ final class AppStore {
 
     /// Deleting an account also wipes everything on this phone: logs,
     /// photos, alarms and reminders. The app returns to its first launch.
-    func eraseAllData() {
+    /// `keepIntro` skips the intro again when the wipe happens on the way
+    /// into a new account rather than after deleting one.
+    func eraseAllData(keepIntro: Bool = false) {
         WakeAlarmScheduler.cancel(id: wake.alarmID)
         let center = UNUserNotificationCenter.current()
         center.removeAllPendingNotificationRequests()
@@ -116,6 +130,7 @@ final class AppStore {
 
         profile = nil
         account = nil
+        lastAccountID = nil
         habits = []
         commitments = []
         runs = []
@@ -127,7 +142,7 @@ final class AppStore {
         progressPhotos = []
         nutritionGoals = NutritionGoals()
         waterByDay = [:]
-        hasSeenIntro = false
+        hasSeenIntro = keepIntro
         sharing = SharingSettings()
         goals = UserGoals()
         reminders = ReminderPreferences()
@@ -1907,6 +1922,7 @@ final class AppStore {
         var goals: UserGoals?
         var reminders: ReminderPreferences?
         var aiPhotoConsent: Bool?
+        var lastAccountID: String?
         var aiEstimatesByDay: [String: Int]?
         var moodByDay: [String: String]
         var chats: [UUID: [ChatMessage]]
@@ -1920,6 +1936,64 @@ final class AppStore {
     }
 
     @ObservationIgnored private var pendingSave: Task<Void, Never>?
+
+    // MARK: - Export
+
+    /// Everything a person logged, in one readable JSON file. Sample
+    /// content and internal state are left out. Photos are listed by date
+    /// only; the image files themselves aren't in the export.
+    private struct DataExport: Encodable {
+        let exportedAt: Date
+        let app = "FlexUp"
+        let profile: UserProfile?
+        let account: Account?
+        let goals: UserGoals
+        let nutritionGoals: NutritionGoals
+        let habits: [Habit]
+        let commitments: [Commitment]
+        let wakeCheckInDays: [String]
+        let sleep: [SleepSession]
+        let runs: [Run]
+        let workouts: [Workout]
+        let routines: [Routine]
+        let food: [FoodEntry]
+        let waterMlByDay: [String: Int]
+        let weight: [WeightEntry]
+        let moodByDay: [String: String]
+        let progressPhotoDates: [Date]
+    }
+
+    /// Writes the export to a temporary file and returns its URL, ready for
+    /// a share sheet.
+    func exportData() throws -> URL {
+        let export = DataExport(
+            exportedAt: .now,
+            profile: profile,
+            account: account,
+            goals: goals,
+            nutritionGoals: nutritionGoals,
+            habits: habits,
+            commitments: commitments.sorted { $0.date < $1.date },
+            wakeCheckInDays: wakeCheckInDays.sorted(),
+            sleep: sleepSessions.sorted { $0.wakeTime < $1.wakeTime },
+            runs: runs.sorted { $0.date < $1.date },
+            workouts: workouts.sorted { $0.date < $1.date },
+            routines: routines,
+            food: foodEntries.sorted { $0.date < $1.date },
+            waterMlByDay: waterByDay,
+            weight: weightEntries.sorted { $0.date < $1.date },
+            moodByDay: moodByDay,
+            progressPhotoDates: progressPhotos.map(\.date).sorted()
+        )
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        let data = try encoder.encode(export)
+        let name = "FlexUp-export-\(Date.now.formatted(.iso8601.year().month().day())).json"
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent(name)
+        try data.write(to: url, options: .atomic)
+        return url
+    }
 
     /// Debounced, off-main-thread persistence. Encoding the whole snapshot
     /// synchronously on every mutation caused visible stutters — now rapid
@@ -1955,6 +2029,7 @@ final class AppStore {
             goals: goals,
             reminders: reminders,
             aiPhotoConsent: aiPhotoConsent,
+            lastAccountID: lastAccountID,
             aiEstimatesByDay: aiEstimatesByDay,
             moodByDay: moodByDay,
             chats: chats
@@ -2001,6 +2076,8 @@ final class AppStore {
         goals = snapshot.goals ?? UserGoals()
         reminders = snapshot.reminders ?? ReminderPreferences()
         aiPhotoConsent = snapshot.aiPhotoConsent
+        // Older saves didn't record it; the signed-in account is the owner.
+        lastAccountID = snapshot.lastAccountID ?? snapshot.account?.userID
         aiEstimatesByDay = snapshot.aiEstimatesByDay ?? [:]
         cuisineContext = snapshot.cuisineContext ?? ""
         wake = snapshot.wake ?? WakeConfig()

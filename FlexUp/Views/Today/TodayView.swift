@@ -10,6 +10,12 @@ struct TodayView: View {
         case progress = "Progress"
         case stats = "Stats"
         var id: String { rawValue }
+
+        /// Community stays out of the bar until it ships: a "coming soon"
+        /// tab reads as unfinished to App Review (guideline 2.1).
+        static var visible: [Section] {
+            FeatureFlags.community ? allCases : allCases.filter { $0 != .community }
+        }
     }
 
     @Environment(AppStore.self) private var store
@@ -33,7 +39,7 @@ struct TodayView: View {
                         title: "Today",
                         tagline: Date.now.formatted(.dateTime.weekday(.wide).day().month(.wide))
                     )
-                    SegmentPills(items: Section.allCases, selection: $section)
+                    SegmentPills(items: Section.visible, selection: $section)
 
                     switch section {
                     case .today:

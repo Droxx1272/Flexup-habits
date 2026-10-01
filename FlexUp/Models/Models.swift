@@ -52,6 +52,14 @@ enum VerificationMethod: String, Codable, CaseIterable, Identifiable {
         case .location: "location"
         }
     }
+
+    /// Only methods the app can really check. GPS means "record this run"
+    /// (`logRun` completes it), so it's offered for runs only. Partner needs
+    /// friends, which ship with community; old partner commitments are
+    /// completed on honor.
+    static func available(for category: ActivityCategory) -> [VerificationMethod] {
+        category == .run ? [.honor, .timer, .photo, .location] : [.honor, .timer, .photo]
+    }
 }
 
 enum ActivityCategory: String, Codable, CaseIterable, Identifiable {

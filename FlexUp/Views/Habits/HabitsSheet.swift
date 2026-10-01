@@ -142,6 +142,9 @@ struct HabitEditorSheet: View {
                                 ForEach(ActivityCategory.allCases) { item in
                                     SelectableChip(label: item.label, icon: item.icon, isSelected: category == item) {
                                         category = item
+                                        if !VerificationMethod.available(for: item).contains(verification) {
+                                            verification = .honor
+                                        }
                                     }
                                 }
                             }
@@ -183,13 +186,16 @@ struct HabitEditorSheet: View {
                     }
 
                     field("Verification") {
-                        HStack(spacing: 8) {
-                            ForEach(VerificationMethod.allCases) { method in
-                                SelectableChip(label: method.label, icon: method.icon, isSelected: verification == method) {
-                                    verification = method
+                        ScrollView(.horizontal) {
+                            HStack(spacing: 8) {
+                                ForEach(VerificationMethod.available(for: category)) { method in
+                                    SelectableChip(label: method.label, icon: method.icon, isSelected: verification == method) {
+                                        verification = method
+                                    }
                                 }
                             }
                         }
+                        .scrollIndicators(.hidden)
                     }
 
                     field("Duration") {
@@ -254,7 +260,10 @@ struct HabitEditorSheet: View {
         category = habit.category
         weekdays = habit.scheduleWeekdays
         timeOfDay = habit.timeOfDay
-        verification = habit.verification
+        // Partner (and GPS outside runs) can't be checked; edit as honor.
+        verification = VerificationMethod.available(for: habit.category).contains(habit.verification)
+            ? habit.verification
+            : .honor
         durationMinutes = habit.durationMinutes
     }
 

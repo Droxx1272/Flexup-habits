@@ -199,6 +199,9 @@ struct PlanSheet: View {
                                 ForEach(ActivityCategory.allCases) { item in
                                     SelectableChip(label: item.label, icon: item.icon, isSelected: category == item) {
                                         category = item
+                                        if !VerificationMethod.available(for: item).contains(verification) {
+                                            verification = .honor
+                                        }
                                     }
                                 }
                             }
@@ -220,13 +223,16 @@ struct PlanSheet: View {
                         Text("Verification")
                             .font(.flexCaption())
                             .foregroundStyle(Theme.inkSubtle)
-                        HStack(spacing: 8) {
-                            ForEach(VerificationMethod.allCases) { method in
-                                SelectableChip(label: method.label, icon: method.icon, isSelected: verification == method) {
-                                    verification = method
+                        ScrollView(.horizontal) {
+                            HStack(spacing: 8) {
+                                ForEach(VerificationMethod.available(for: category)) { method in
+                                    SelectableChip(label: method.label, icon: method.icon, isSelected: verification == method) {
+                                        verification = method
+                                    }
                                 }
                             }
                         }
+                        .scrollIndicators(.hidden)
                     }
 
                     VStack(alignment: .leading, spacing: 8) {

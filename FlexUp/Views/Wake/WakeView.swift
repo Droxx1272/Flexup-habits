@@ -1,5 +1,6 @@
 import SwiftUI
 import UIKit
+import UserNotifications
 
 /// The morning pillar (wake alarm and check-in) and the night pillar right
 /// beside it (bedtime reminder and sleep log), on one screen.
@@ -11,7 +12,12 @@ struct WakeView: View {
     }
 
     @Environment(AppStore.self) private var store
+    @Environment(\.openURL) private var openURL
+    @Environment(\.scenePhase) private var scenePhase
     @State private var section: Section = .wake
+    /// Notifications switched off in Settings. Without AlarmKit that means
+    /// the wake-up can't make a sound at all, so it has to be said.
+    @State private var notificationsDenied = false
     @State private var showSetup = false
     @State private var showBedtimeSetup = false
     @State private var showLogSleep = false
@@ -27,6 +33,9 @@ struct WakeView: View {
 
                     switch section {
                     case .wake:
+                        if store.wake.enabled && !store.isWakeAlarmReal && notificationsDenied {
+                            blockedCard
+                        }
                         heroCard
                         WakeCheckInCard()
                         streakCard
@@ -45,6 +54,11 @@ struct WakeView: View {
             .sheet(isPresented: $showSetup) {
                 WakeSetupSheet()
             }
+            .task { await refreshPermission() }
+            .onChange(of: scenePhase) { _, phase in
+                // Coming back from Settings should clear the warning at once.
+                if phase == .active { Task { await refreshPermission() } }
+            }
             .sheet(isPresented: $showBedtimeSetup) {
                 BedtimeSetupSheet()
             }
@@ -52,6 +66,42 @@ struct WakeView: View {
                 LogSleepSheet()
             }
         }
+    }
+
+    // MARK: Permission
+
+    private func refreshPermission() async {
+        let status = await UNUserNotificationCenter.current().notificationSettings().authorizationStatus
+        let wasDenied = notificationsDenied
+        notificationsDenied = status == .denied
+        // Just switched back on: schedule what couldn't be scheduled before.
+        if wasDenied && !notificationsDenied {
+            store.updateWakeSchedule()
+            store.updateBedtimeSchedule()
+        }
+    }
+
+    private var blockedCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 10) {
+                Image(systemName: "bell.slash.fill")
+                    .foregroundStyle(Theme.danger)
+                Text("Your wake-up can't ring")
+                    .font(.flexBodyBold())
+                    .foregroundStyle(Theme.ink)
+            }
+            Text("Notifications for FlexUp are turned off, so nothing will sound at \(store.wake.timeLabel). Turn them on in Settings.")
+                .font(.flexCaption())
+                .foregroundStyle(Theme.inkSubtle)
+                .fixedSize(horizontal: false, vertical: true)
+            Button("Open Settings") {
+                if let url = URL(string: UIApplication.openSettingsURLString) { openURL(url) }
+            }
+            .buttonStyle(SecondaryButtonStyle(tint: Theme.danger, background: Theme.danger.opacity(0.1)))
+        }
+        .padding(16)
+        .background(Theme.card)
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
     }
 
     // MARK: Hero

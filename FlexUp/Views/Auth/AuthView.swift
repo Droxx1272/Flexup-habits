@@ -10,6 +10,10 @@ struct AuthView: View {
 
     @State private var showEmailForm = false
     @State private var authError: String?
+    /// A different account signing in on a phone that holds someone
+    /// else's logs. Waits for "start fresh" or "keep".
+    @State private var pendingAccount: Account?
+    @State private var emailAccount: Account?
 
     var body: some View {
         NavigationStack {
@@ -89,8 +93,45 @@ struct AuthView: View {
             }
         }
         .tint(Theme.ink)
-        .sheet(isPresented: $showEmailForm) {
-            EmailSignInSheet()
+        // Signs in after the sheet is gone, so the "someone else's logs"
+        // question isn't presented mid-dismissal.
+        .sheet(isPresented: $showEmailForm, onDismiss: {
+            if let account = emailAccount {
+                emailAccount = nil
+                attemptSignIn(account)
+            }
+        }) {
+            EmailSignInSheet { account in emailAccount = account }
+        }
+        .confirmationDialog(
+            "This iPhone has someone else's logs",
+            isPresented: Binding(get: { pendingAccount != nil }, set: { if !$0 { pendingAccount = nil } }),
+            titleVisibility: .visible
+        ) {
+            Button("Start fresh", role: .destructive) {
+                guard let account = pendingAccount else { return }
+                pendingAccount = nil
+                store.eraseAllData(keepIntro: true)
+                store.signIn(account)
+            }
+            Button("Keep them as mine") {
+                guard let account = pendingAccount else { return }
+                pendingAccount = nil
+                store.signIn(account)
+            }
+            Button("Cancel", role: .cancel) { pendingAccount = nil }
+        } message: {
+            Text("Your account lives on this phone, and the logs here belong to another account. Start fresh erases them for good.")
+        }
+    }
+
+    /// Every local sign-in goes through here so a second person on the
+    /// same phone never lands in the first person's logs by surprise.
+    private func attemptSignIn(_ account: Account) {
+        if store.holdsAnotherAccountsData(account) {
+            pendingAccount = account
+        } else {
+            store.signIn(account)
         }
     }
 
@@ -109,7 +150,7 @@ struct AuthView: View {
             let fullName = [credential.fullName?.givenName, credential.fullName?.familyName]
                 .compactMap { $0 }
                 .joined(separator: " ")
-            store.signIn(Account(
+            attemptSignIn(Account(
                 userID: credential.user,
                 name: fullName.isEmpty ? "" : fullName,
                 email: credential.email,
@@ -126,7 +167,7 @@ struct AuthView: View {
 // MARK: - Email fallback
 
 struct EmailSignInSheet: View {
-    @Environment(AppStore.self) private var store
+    var onContinue: (Account) -> Void
     @Environment(\.dismiss) private var dismiss
 
     @State private var name = ""
@@ -178,7 +219,7 @@ struct EmailSignInSheet: View {
                 .padding(.horizontal, 10)
 
             Button("Continue") {
-                store.signIn(Account(
+                onContinue(Account(
                     userID: "email:\(email.trimmingCharacters(in: .whitespaces).lowercased())",
                     name: name.trimmingCharacters(in: .whitespaces),
                     email: email.trimmingCharacters(in: .whitespaces).lowercased(),
