@@ -126,17 +126,17 @@ struct ProgressSection: View {
         let avgCalories = foodDays.isEmpty ? nil : foodDays.reduce(0) { $0 + store.calories(on: $1) } / foodDays.count
 
         return VStack(alignment: .leading, spacing: 10) {
-            SectionHeader(title: "At a glance", subtitle: "Your \(range.label), across every pillar.")
-            HStack(spacing: 10) {
-                TrackStat(value: "\(store.completedCount(range))", label: "Done")
-                TrackStat(value: "\(store.wakeCheckIns(range))", label: "Wake-ups")
-                TrackStat(value: avgSleep.map { String(format: "%.1fh", $0) } ?? "-", label: "Avg sleep")
-            }
-            HStack(spacing: 10) {
-                TrackStat(value: String(format: "%.1f", km), label: "KM run")
-                TrackStat(value: "\(store.workouts(in: range).count)", label: "Sessions")
-                TrackStat(value: avgCalories.map { "\($0)" } ?? "-", label: "Avg kcal")
-            }
+            SectionHeader(title: "At a glance")
+            StatStrip([
+                ("\(store.completedCount(range))", "Done"),
+                ("\(store.wakeCheckIns(range))", "Wake-ups"),
+                (avgSleep.map { String(format: "%.1fh", $0) } ?? "-", "Avg sleep")
+            ])
+            StatStrip([
+                (String(format: "%.1f", km), "KM run"),
+                ("\(store.workouts(in: range).count)", "Sessions"),
+                (avgCalories.map { "\($0)" } ?? "-", "Avg kcal")
+            ])
         }
     }
 

@@ -25,11 +25,12 @@ struct LiftSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
-            HStack(spacing: 10) {
-                TrackStat(value: "\(store.workoutsThisWeek)/\(store.goals.gymPerWeek)", label: "This week")
-                TrackStat(value: "\(store.workouts.count)", label: "Sessions")
-                TrackStat(value: volumeText, label: "Total kg")
-            }
+            // This week's count lives in the header; these are the totals.
+            StatStrip([
+                ("\(store.workouts.count)", "Sessions"),
+                (volumeText, "Total kg"),
+                ("\(store.personalRecords.count)", "PRs")
+            ])
 
             if let draft = store.workoutDraft {
                 resumeCard(draft)
@@ -229,7 +230,7 @@ struct LiftSection: View {
 
     private var historySection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            SectionHeader(title: "History", subtitle: store.workouts.isEmpty ? nil : "Tap a session for details.")
+            SectionHeader(title: "History")
             if store.workouts.isEmpty {
                 EmptyStateCard(
                     icon: "dumbbell",
@@ -1175,11 +1176,11 @@ struct ExerciseHistorySheet: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
-                    HStack(spacing: 8) {
-                        TrackStat(value: heaviest.map { "\(WeightFormat.kg($0.weightKg))×\($0.reps)" } ?? "-", label: "Heaviest")
-                        TrackStat(value: bestOneRep > 0 ? WeightFormat.kg(bestOneRep.rounded()) : "-", label: "Est. 1RM kg")
-                        TrackStat(value: "\(sessions.count)", label: "Sessions")
-                    }
+                    StatStrip([
+                        (heaviest.map { "\(WeightFormat.kg($0.weightKg))×\($0.reps)" } ?? "-", "Heaviest"),
+                        (bestOneRep > 0 ? WeightFormat.kg(bestOneRep.rounded()) : "-", "Est. 1RM kg"),
+                        ("\(sessions.count)", "Sessions")
+                    ])
 
                     if points.count >= 2 {
                         VStack(alignment: .leading, spacing: 8) {
@@ -1260,6 +1261,7 @@ struct WorkoutDetailSheet: View {
     @Environment(AppStore.self) private var store
     @Environment(\.dismiss) private var dismiss
     @State private var savedRoutine = false
+    @State private var confirmDelete = false
 
     var body: some View {
         NavigationStack {
@@ -1270,11 +1272,11 @@ struct WorkoutDetailSheet: View {
                         .tracking(1)
                         .foregroundStyle(Theme.inkSubtle)
 
-                    HStack(spacing: 8) {
-                        TrackStat(value: RunFormat.duration(workout.duration), label: "Duration")
-                        TrackStat(value: "\(Int(workout.totalVolumeKg))", label: "Volume kg")
-                        TrackStat(value: "\(workout.totalSets)", label: "Sets")
-                    }
+                    StatStrip([
+                        (RunFormat.duration(workout.duration), "Duration"),
+                        ("\(Int(workout.totalVolumeKg))", "Volume kg"),
+                        ("\(workout.totalSets)", "Sets")
+                    ])
 
                     ForEach(workout.exercises) { exercise in
                         VStack(alignment: .leading, spacing: 8) {
@@ -1328,9 +1330,24 @@ struct WorkoutDetailSheet: View {
             .navigationTitle(workout.title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(role: .destructive) {
+                        confirmDelete = true
+                    } label: {
+                        Image(systemName: "trash")
+                    }
+                    .accessibilityLabel("Delete session")
+                }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") { dismiss() }
                 }
+            }
+            .confirmationDialog("Delete this session?", isPresented: $confirmDelete, titleVisibility: .visible) {
+                Button("Delete session", role: .destructive) {
+                    store.deleteWorkout(workout)
+                    dismiss()
+                }
+                Button("Cancel", role: .cancel) {}
             }
         }
         .tint(Theme.ink)

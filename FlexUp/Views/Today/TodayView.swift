@@ -200,7 +200,7 @@ struct TodayView: View {
 
     private var commitmentsSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            SectionHeader(title: "Your commitments", subtitle: "Tap one to start it or check it off.")
+            SectionHeader(title: "Your commitments")
             if store.todayCommitments.isEmpty {
                 EmptyStateCard(
                     icon: "sun.max",
@@ -219,12 +219,13 @@ struct TodayView: View {
 
     // MARK: Plan / Quick Start
 
+    /// Two quiet ways to add something: plan it for later, or start now.
     private var planRow: some View {
-        VStack(spacing: 10) {
+        HStack(spacing: 10) {
             Button {
                 showPlan = true
             } label: {
-                Label("Plan something", systemImage: "calendar.badge.plus")
+                Label("Plan", systemImage: "calendar.badge.plus")
             }
             .buttonStyle(SecondaryButtonStyle())
 
@@ -237,17 +238,13 @@ struct TodayView: View {
                     }
                 }
             } label: {
-                HStack(spacing: 8) {
-                    Image(systemName: "bolt.fill")
-                    Text("Quick Start")
-                }
-                .font(.flexBodyBold())
-                .foregroundStyle(Theme.background)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 17)
-                .background(Theme.ink)
-                .clipShape(Capsule())
-                .shadow(color: Theme.ink.opacity(0.25), radius: 10, y: 4)
+                Label("Start now", systemImage: "bolt.fill")
+                    .font(.flexBodyBold())
+                    .foregroundStyle(Theme.ink)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 16)
+                    .background(Theme.ink.opacity(0.08))
+                    .clipShape(Capsule())
             }
         }
     }

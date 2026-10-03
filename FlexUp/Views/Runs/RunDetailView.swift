@@ -5,6 +5,9 @@ import MapKit
 /// and per-km splits with pace bars.
 struct RunDetailView: View {
     let run: Run
+    @Environment(AppStore.self) private var store
+    @Environment(\.dismiss) private var dismiss
+    @State private var confirmDelete = false
 
     var body: some View {
         ScrollView {
@@ -21,6 +24,23 @@ struct RunDetailView: View {
         .background(Theme.background)
         .navigationTitle(run.date.formatted(.dateTime.weekday(.wide).day().month()))
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button(role: .destructive) {
+                    confirmDelete = true
+                } label: {
+                    Image(systemName: "trash")
+                }
+                .accessibilityLabel("Delete run")
+            }
+        }
+        .confirmationDialog("Delete this run?", isPresented: $confirmDelete, titleVisibility: .visible) {
+            Button("Delete run", role: .destructive) {
+                store.deleteRun(run)
+                dismiss()
+            }
+            Button("Cancel", role: .cancel) {}
+        }
     }
 
     // MARK: Header
@@ -81,14 +101,14 @@ struct RunDetailView: View {
 
     private var statsGrid: some View {
         VStack(spacing: 10) {
-            HStack(spacing: 10) {
-                TrackStat(value: RunFormat.duration(run.duration), label: "Time")
-                TrackStat(value: RunFormat.pace(run.paceSecondsPerKm), label: "Avg pace")
-            }
-            HStack(spacing: 10) {
-                TrackStat(value: "\(Int(run.elevationGainM ?? 0))", label: "Elev gain M")
-                TrackStat(value: "\(Int((run.kilometers * 62).rounded()))", label: "Est kcal")
-            }
+            StatStrip([
+                (RunFormat.duration(run.duration), "Time"),
+                (RunFormat.pace(run.paceSecondsPerKm), "Avg pace")
+            ])
+            StatStrip([
+                ("\(Int(run.elevationGainM ?? 0))", "Elev gain M"),
+                ("\(Int((run.kilometers * 62).rounded()))", "Est kcal")
+            ])
         }
     }
 

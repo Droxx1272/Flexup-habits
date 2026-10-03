@@ -23,11 +23,11 @@ struct RunSection: View {
     // MARK: Stats
 
     private var statRow: some View {
-        HStack(spacing: 10) {
-            TrackStat(value: RunFormat.kilometers(store.totalRunKilometers), label: "Total KM")
-            TrackStat(value: "\(store.runs.count)", label: "Runs")
-            TrackStat(value: RunFormat.pace(store.bestPaceSecondsPerKm), label: "Best pace")
-        }
+        StatStrip([
+            (RunFormat.kilometers(store.totalRunKilometers), "Total KM"),
+            ("\(store.runs.count)", "Runs"),
+            (RunFormat.pace(store.bestPaceSecondsPerKm), "Best pace")
+        ])
     }
 
     // MARK: Start
@@ -49,7 +49,7 @@ struct RunSection: View {
 
     private var historySection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            SectionHeader(title: "History", subtitle: store.runs.isEmpty ? nil : "Tap for the route and splits. Long-press to delete.")
+            SectionHeader(title: "History")
             if store.runs.isEmpty {
                 EmptyStateCard(
                     icon: "figure.run",

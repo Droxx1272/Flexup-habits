@@ -200,11 +200,11 @@ struct FoodPortionPicker: View {
                         .foregroundStyle(Theme.inkSubtle)
                 }
 
-                HStack(spacing: 8) {
-                    TrackStat(value: "\(Int(macros.protein.rounded()))g", label: "Protein")
-                    TrackStat(value: "\(Int(macros.carbs.rounded()))g", label: "Carbs")
-                    TrackStat(value: "\(Int(macros.fat.rounded()))g", label: "Fat")
-                }
+                StatStrip([
+                    ("\(Int(macros.protein.rounded()))g", "Protein"),
+                    ("\(Int(macros.carbs.rounded()))g", "Carbs"),
+                    ("\(Int(macros.fat.rounded()))g", "Fat")
+                ])
 
                 VStack(alignment: .leading, spacing: 10) {
                     Text("PORTION")

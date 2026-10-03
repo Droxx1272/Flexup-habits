@@ -28,7 +28,7 @@ struct WakeView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
-                    ScreenHeader(title: "Wake", tagline: "Win the morning first.")
+                    ScreenHeader(title: "Wake", tagline: headerStatus)
                     SegmentPills(items: Section.allCases, selection: $section)
 
                     switch section {
@@ -66,6 +66,14 @@ struct WakeView: View {
                 LogSleepSheet()
             }
         }
+    }
+
+    /// Live status under the title: what's set, or how today went.
+    private var headerStatus: String {
+        if store.isWakeCheckedInToday {
+            return store.wakeStreak > 1 ? "Up today · \(store.wakeStreak)-day streak" : "Up today"
+        }
+        return store.wake.enabled ? "Wake-up at \(store.wake.timeLabel)" : "No wake-up set"
     }
 
     // MARK: Permission
@@ -109,7 +117,7 @@ struct WakeView: View {
     private var heroCard: some View {
         FlexCard {
             VStack(alignment: .leading, spacing: 12) {
-                Text(store.wake.enabled ? "TOMORROW, YOU WILL WAKE UP AT" : "PICK YOUR WAKE-UP TIME")
+                Text(store.wake.enabled ? "WAKE-UP · \(daysLabel(store.wake.days))" : "PICK YOUR WAKE-UP TIME")
                     .font(.flexMono(11))
                     .tracking(2)
                     .foregroundStyle(Theme.inkSubtle)
@@ -124,30 +132,21 @@ struct WakeView: View {
                     alarmModeBadge
                 }
 
-                HStack(spacing: 14) {
-                    flowStep(icon: "alarm", label: "Alarm rings")
-                    Image(systemName: "arrow.right")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(Theme.inkSubtle)
-                    flowStep(icon: "camera", label: store.proofSpotURL == nil ? "Check in" : "Photo your spot")
-                    Image(systemName: "arrow.right")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(Theme.inkSubtle)
-                    flowStep(icon: "sun.max", label: "Day's yours")
-                }
-                .frame(maxWidth: .infinity)
-
-                Text("No snoozing. No backup alarms.")
-                    .font(.flexCaption())
-                    .foregroundStyle(Theme.inkSubtle)
-                    .frame(maxWidth: .infinity, alignment: .center)
-
                 Button(store.wake.enabled ? "Edit wake-up" : "Set wake-up") {
                     showSetup = true
                 }
                 .buttonStyle(store.wake.enabled ? SecondaryButtonStyle() : SecondaryButtonStyle(tint: Theme.background, background: Theme.ink))
             }
         }
+    }
+
+    /// "WEEKDAYS", "EVERY DAY", or the short day names.
+    private func daysLabel(_ days: Set<Int>) -> String {
+        if days.count == 7 { return "EVERY DAY" }
+        if days == [2, 3, 4, 5, 6] { return "WEEKDAYS" }
+        if days == [1, 7] { return "WEEKENDS" }
+        let symbols = calendar.shortWeekdaySymbols
+        return days.sorted().map { symbols[$0 - 1].uppercased() }.joined(separator: " ")
     }
 
     /// Says plainly which mechanism is live. A real alarm rings through
@@ -169,22 +168,6 @@ struct WakeView: View {
         .clipShape(Capsule())
     }
 
-    private func flowStep(icon: String, label: String) -> some View {
-        VStack(spacing: 6) {
-            ZStack {
-                Circle()
-                    .fill(Theme.ink)
-                    .frame(width: 44, height: 44)
-                Image(systemName: icon)
-                    .font(.system(size: 17, weight: .semibold))
-                    .foregroundStyle(Theme.background)
-            }
-            Text(label)
-                .font(.flexCaption())
-                .foregroundStyle(Theme.inkSubtle)
-        }
-    }
-
     // MARK: Streak
 
     private var streakCard: some View {
@@ -204,10 +187,6 @@ struct WakeView: View {
                     .font(.flexBodyBold())
                     .foregroundStyle(Theme.amber)
                 }
-
-                Text("Complete your check-in on scheduled days to build your streak.")
-                    .font(.flexCaption())
-                    .foregroundStyle(Theme.inkSubtle)
 
                 HStack(spacing: 8) {
                     ForEach(weekDays, id: \.self) { day in
@@ -267,10 +246,6 @@ struct WakeView: View {
                     .minimumScaleFactor(0.5)
                     .lineLimit(1)
 
-                Text("A consistent bedtime is what makes the wake-up easy.")
-                    .font(.flexCaption())
-                    .foregroundStyle(Theme.inkSubtle)
-
                 Button(store.bedtime.enabled ? "Edit bedtime" : "Set bedtime") {
                     showBedtimeSetup = true
                 }
@@ -293,11 +268,11 @@ struct WakeView: View {
             }
             .buttonStyle(PrimaryButtonStyle())
 
-            HStack(spacing: 10) {
-                TrackStat(value: lastNightLabel, label: "Last night")
-                TrackStat(value: averageLabel, label: "7-day avg")
-                TrackStat(value: "\(store.sleepLogStreak)", label: "Night streak")
-            }
+            StatStrip([
+                (lastNightLabel, "Last night"),
+                (averageLabel, "7-day avg"),
+                ("\(store.sleepLogStreak)", "Night streak")
+            ])
         }
     }
 
@@ -315,7 +290,7 @@ struct WakeView: View {
 
     private var sleepHistoryCard: some View {
         VStack(alignment: .leading, spacing: 12) {
-            SectionHeader(title: "History", subtitle: store.sleepSessions.isEmpty ? nil : "Most recent first. Long-press to delete.")
+            SectionHeader(title: "History")
             if store.sleepSessions.isEmpty {
                 EmptyStateCard(
                     icon: "moon.zzz",

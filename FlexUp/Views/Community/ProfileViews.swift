@@ -141,11 +141,11 @@ struct MyProfileView: View {
                         .font(.flexBodyBold())
                         .foregroundStyle(Theme.ink)
                 }
-                HStack(spacing: 8) {
-                    TrackStat(value: "\(week.wakeUps)/\(week.wakeDays)", label: "Wake-ups")
-                    TrackStat(value: "\(week.runs)/\(store.goals.runsPerWeek)", label: "Runs")
-                    TrackStat(value: "\(week.workouts)/\(store.goals.gymPerWeek)", label: "Sessions")
-                }
+                StatStrip([
+                    ("\(week.wakeUps)/\(week.wakeDays)", "Wake-ups"),
+                    ("\(week.runs)/\(store.goals.runsPerWeek)", "Runs"),
+                    ("\(week.workouts)/\(store.goals.gymPerWeek)", "Sessions")
+                ])
                 Text("THIS WEEK")
                     .font(.flexMono(8))
                     .tracking(1.5)
@@ -366,11 +366,11 @@ struct MemberProfileView: View {
     private var statsRow: some View {
         if let profile, profile.relationship == "self" || profile.relationship == "friend" {
             VStack(spacing: 8) {
-                HStack(spacing: 8) {
-                    TrackStat(value: profile.wakeStreak.map { "\($0)" } ?? "-", label: "Wake streak")
-                    TrackStat(value: "\(profile.month["run"] ?? 0)", label: "Runs")
-                    TrackStat(value: "\(profile.month["workout"] ?? 0)", label: "Sessions")
-                }
+                StatStrip([
+                    (profile.wakeStreak.map { "\($0)" } ?? "-", "Wake streak"),
+                    ("\(profile.month["run"] ?? 0)", "Runs"),
+                    ("\(profile.month["workout"] ?? 0)", "Sessions")
+                ])
                 Text("THIS MONTH · SHARED ACTIVITY")
                     .font(.flexMono(8))
                     .tracking(1.5)

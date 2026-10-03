@@ -307,6 +307,50 @@ struct SegmentPills<T: Identifiable & Hashable & RawRepresentable>: View where T
     }
 }
 
+// MARK: - Stat strip
+
+/// Two to four numbers in one card, split by hairlines. Calmer than a row
+/// of separate tiles, and the same shape everywhere a screen shows stats.
+struct StatStrip: View {
+    let items: [(value: String, label: String)]
+
+    init(_ items: [(value: String, label: String)]) {
+        self.items = items
+    }
+
+    var body: some View {
+        HStack(spacing: 0) {
+            ForEach(Array(items.enumerated()), id: \.offset) { index, item in
+                if index > 0 {
+                    Rectangle()
+                        .fill(Theme.inkSubtle.opacity(0.18))
+                        .frame(width: 1, height: 30)
+                }
+                VStack(spacing: 5) {
+                    Text(item.value)
+                        .font(.flexStat(22))
+                        .foregroundStyle(Theme.ink)
+                        .monospacedDigit()
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.6)
+                    Text(item.label.uppercased())
+                        .font(.flexMono(9))
+                        .tracking(1.2)
+                        .foregroundStyle(Theme.inkSubtle)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                }
+                .frame(maxWidth: .infinity)
+                .accessibilityElement(children: .combine)
+            }
+        }
+        .padding(.vertical, 16)
+        .padding(.horizontal, 6)
+        .background(Theme.card)
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+    }
+}
+
 // MARK: - Selectable chip
 
 struct SelectableChip: View {

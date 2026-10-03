@@ -13,6 +13,8 @@ struct FuelSection: View {
     @State private var showGoals = false
     @State private var showLogWeight = false
     @State private var selectedEntry: FoodEntry?
+    /// Fibre, sugar, sodium and the energy split stay folded away until asked for.
+    @State private var showNutritionDetails = false
 
     private var calendar: Calendar { .current }
     private var isToday: Bool { calendar.isDateInToday(day) }
@@ -37,11 +39,7 @@ struct FuelSection: View {
             }
             .buttonStyle(PrimaryButtonStyle())
 
-            macrosCard
-
-            ForEach(MealType.allCases) { meal in
-                mealCard(meal)
-            }
+            mealsCard
 
             waterCard
             weekCard
@@ -110,115 +108,97 @@ struct FuelSection: View {
         withAnimation(.spring(duration: 0.25)) { day = next }
     }
 
-    // MARK: Budget
+    // MARK: Budget and macros
 
+    /// Calories left, the three macros, and details on demand, in one card.
     private var budgetCard: some View {
-        FlexCard {
-            HStack(spacing: 18) {
-                ZStack {
-                    ProgressRing(progress: goals.calories > 0 ? min(1, Double(consumed) / Double(goals.calories)) : 0)
-                        .frame(width: 84, height: 84)
-                    VStack(spacing: 1) {
-                        Text("\(abs(remaining))")
-                            .font(.flexStat(22))
-                            .foregroundStyle(remaining >= 0 ? Theme.ink : Theme.danger)
-                            .minimumScaleFactor(0.6)
-                            .lineLimit(1)
-                        Text(remaining >= 0 ? "LEFT" : "OVER")
-                            .font(.flexMono(8))
-                            .tracking(1.5)
-                            .foregroundStyle(Theme.inkSubtle)
-                    }
-                }
-                VStack(alignment: .leading, spacing: 5) {
-                    Text(isToday ? "TODAY'S FUEL" : "THIS DAY'S FUEL")
-                        .font(.flexMono(10))
-                        .tracking(2)
-                        .foregroundStyle(Theme.inkSubtle)
-                    Text("\(consumed) of \(goals.calories) kcal")
-                        .font(.flexBodyBold())
-                        .foregroundStyle(Theme.ink)
-                    if store.foodLogStreak > 1 {
-                        Text("\(store.foodLogStreak)-DAY LOGGING STREAK")
-                            .font(.flexMono(9))
-                            .tracking(1)
-                            .foregroundStyle(Theme.accent)
-                    }
-                    Button {
-                        showGoals = true
-                    } label: {
-                        Text("EDIT GOALS")
-                            .font(.flexMono(9))
-                            .tracking(1)
-                            .foregroundStyle(Theme.accent)
-                    }
-                    .buttonStyle(.plain)
-                }
-                Spacer()
-            }
-        }
-    }
-
-    // MARK: Macros
-
-    private var macrosCard: some View {
         let known = store.caloriesWithMacros(on: day)
         let split = macros.calorieSplit
         let splitTotal = split.protein + split.carbs + split.fat
 
-        return FlexCard(padding: 16) {
-            VStack(alignment: .leading, spacing: 14) {
-                HStack(alignment: .center) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("MACROS")
-                            .font(.flexMono(11))
-                            .tracking(1.5)
-                            .foregroundStyle(Theme.ink)
-                        if splitTotal > 0 {
-                            Text("P \(percent(split.protein, of: splitTotal))% · C \(percent(split.carbs, of: splitTotal))% · F \(percent(split.fat, of: splitTotal))% OF ENERGY")
-                                .font(.flexMono(9))
-                                .tracking(1)
-                                .foregroundStyle(Theme.inkSubtle)
-                        } else {
-                            Text("LOG FOOD TO SEE YOUR SPLIT")
-                                .font(.flexMono(9))
-                                .tracking(1)
+        return FlexCard {
+            VStack(alignment: .leading, spacing: 16) {
+                HStack(spacing: 18) {
+                    ZStack {
+                        ProgressRing(progress: goals.calories > 0 ? min(1, Double(consumed) / Double(goals.calories)) : 0)
+                            .frame(width: 84, height: 84)
+                        VStack(spacing: 1) {
+                            Text("\(abs(remaining))")
+                                .font(.flexStat(22))
+                                .foregroundStyle(remaining >= 0 ? Theme.ink : Theme.danger)
+                                .minimumScaleFactor(0.6)
+                                .lineLimit(1)
+                            Text(remaining >= 0 ? "LEFT" : "OVER")
+                                .font(.flexMono(8))
+                                .tracking(1.5)
                                 .foregroundStyle(Theme.inkSubtle)
                         }
+                    }
+                    VStack(alignment: .leading, spacing: 5) {
+                        Text("\(consumed) of \(goals.calories) kcal")
+                            .font(.flexBodyBold())
+                            .foregroundStyle(Theme.ink)
+                        if store.foodLogStreak > 1 {
+                            Text("\(store.foodLogStreak)-DAY LOGGING STREAK")
+                                .font(.flexMono(9))
+                                .tracking(1)
+                                .foregroundStyle(Theme.accent)
+                        }
+                        Button {
+                            showGoals = true
+                        } label: {
+                            Text("EDIT GOALS")
+                                .font(.flexMono(9))
+                                .tracking(1)
+                                .foregroundStyle(Theme.accent)
+                        }
+                        .buttonStyle(.plain)
                     }
                     Spacer()
-                    if splitTotal > 0 {
-                        Chart {
-                            SectorMark(angle: .value("Protein", split.protein), innerRadius: .ratio(0.62), angularInset: 1.5)
-                                .foregroundStyle(MacroKind.protein.color)
-                            SectorMark(angle: .value("Carbs", split.carbs), innerRadius: .ratio(0.62), angularInset: 1.5)
-                                .foregroundStyle(MacroKind.carbs.color)
-                            SectorMark(angle: .value("Fat", split.fat), innerRadius: .ratio(0.62), angularInset: 1.5)
-                                .foregroundStyle(MacroKind.fat.color)
-                        }
-                        .frame(width: 52, height: 52)
-                    }
                 }
 
-                MacroBar(kind: .protein, value: macros.protein, goal: goals.protein)
-                MacroBar(kind: .carbs, value: macros.carbs, goal: goals.carbs)
-                MacroBar(kind: .fat, value: macros.fat, goal: goals.fat)
+                VStack(spacing: 12) {
+                    MacroBar(kind: .protein, value: macros.protein, goal: goals.protein)
+                    MacroBar(kind: .carbs, value: macros.carbs, goal: goals.carbs)
+                    MacroBar(kind: .fat, value: macros.fat, goal: goals.fat)
+                }
 
-                Rectangle()
-                    .fill(Theme.inkSubtle.opacity(0.15))
-                    .frame(height: 1)
-
-                HStack(spacing: 0) {
-                    microStat("FIBRE", "\(Int(macros.fiber.rounded()))/\(goals.fiber)g")
-                    microStat("SUGAR", "\(Int(macros.sugar.rounded()))g")
-                    microStat("SODIUM", "\(Int(macros.sodiumMg.rounded()))mg")
+                if showNutritionDetails {
+                    VStack(alignment: .leading, spacing: 12) {
+                        HStack(spacing: 0) {
+                            microStat("FIBRE", "\(Int(macros.fiber.rounded()))/\(goals.fiber)g")
+                            microStat("SUGAR", "\(Int(macros.sugar.rounded()))g")
+                            microStat("SODIUM", "\(Int(macros.sodiumMg.rounded()))mg")
+                        }
+                        if splitTotal > 0 {
+                            Text("ENERGY FROM P \(percent(split.protein, of: splitTotal))% · C \(percent(split.carbs, of: splitTotal))% · F \(percent(split.fat, of: splitTotal))%")
+                                .font(.flexMono(9))
+                                .tracking(1)
+                                .foregroundStyle(Theme.inkSubtle)
+                        }
+                    }
+                    .transition(.opacity)
                 }
 
                 if consumed > 0 && known < consumed {
-                    Text("Macros cover \(known) of \(consumed) kcal. Entries logged with calories only aren't counted here.")
+                    Text("Macros cover \(known) of \(consumed) kcal. Entries logged with calories only aren't counted.")
                         .font(.flexCaption())
                         .foregroundStyle(Theme.amber)
                 }
+
+                Button {
+                    withAnimation(.snappy) { showNutritionDetails.toggle() }
+                } label: {
+                    HStack(spacing: 4) {
+                        Text(showNutritionDetails ? "LESS" : "FIBRE, SUGAR, SODIUM")
+                        Image(systemName: showNutritionDetails ? "chevron.up" : "chevron.down")
+                    }
+                    .font(.flexMono(9))
+                    .tracking(1)
+                    .foregroundStyle(Theme.inkSubtle)
+                    .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.plain)
             }
         }
     }
@@ -245,16 +225,37 @@ struct FuelSection: View {
 
     // MARK: Meals
 
-    private func mealCard(_ meal: MealType) -> some View {
+    /// All four meals in one card: a header row each, entries underneath.
+    private var mealsCard: some View {
+        FlexCard(padding: 14) {
+            VStack(alignment: .leading, spacing: 0) {
+                ForEach(Array(MealType.allCases.enumerated()), id: \.element) { index, meal in
+                    if index > 0 {
+                        Rectangle()
+                            .fill(Theme.inkSubtle.opacity(0.15))
+                            .frame(height: 1)
+                            .padding(.vertical, 10)
+                    }
+                    mealSection(meal)
+                }
+            }
+        }
+    }
+
+    private func mealSection(_ meal: MealType) -> some View {
         let entries = store.food(on: day, meal: meal)
         let total = entries.reduce(0) { $0 + $1.calories }
 
-        return FlexCard(padding: 14) {
-            VStack(alignment: .leading, spacing: 10) {
+        return VStack(alignment: .leading, spacing: 8) {
+            Button {
+                addMeal = meal
+                showAddFood = true
+            } label: {
                 HStack {
                     Image(systemName: meal.icon)
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(Theme.accent)
+                        .frame(width: 18)
                     Text(meal.label.uppercased())
                         .font(.flexMono(11))
                         .tracking(1.5)
@@ -266,41 +267,35 @@ struct FuelSection: View {
                             .tracking(1)
                             .foregroundStyle(Theme.inkSubtle)
                     }
-                    Button {
-                        addMeal = meal
-                        showAddFood = true
-                    } label: {
-                        Image(systemName: "plus.circle.fill")
-                            .font(.title3)
-                            .foregroundStyle(Theme.accent)
-                    }
-                    .buttonStyle(.plain)
+                    Image(systemName: "plus")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundStyle(Theme.accent)
+                        .frame(width: 28, height: 28)
+                        .background(Theme.accentSoft)
+                        .clipShape(Circle())
                 }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Add to \(meal.label)")
 
-                if entries.isEmpty {
-                    Text("Nothing logged.")
-                        .font(.flexCaption())
-                        .foregroundStyle(Theme.inkSubtle)
-                } else {
-                    ForEach(entries) { entry in
-                        Button {
-                            selectedEntry = entry
-                        } label: {
-                            FoodEntryRow(entry: entry)
-                        }
-                        .buttonStyle(.plain)
-                        .contextMenu {
-                            Button {
-                                store.relogFood(entry, on: .now)
-                            } label: {
-                                Label("Log again today", systemImage: "arrow.clockwise")
-                            }
-                            Button(role: .destructive) {
-                                store.deleteFood(entry)
-                            } label: {
-                                Label("Delete", systemImage: "trash")
-                            }
-                        }
+            ForEach(entries) { entry in
+                Button {
+                    selectedEntry = entry
+                } label: {
+                    FoodEntryRow(entry: entry)
+                }
+                .buttonStyle(.plain)
+                .contextMenu {
+                    Button {
+                        store.relogFood(entry, on: .now)
+                    } label: {
+                        Label("Log again today", systemImage: "arrow.clockwise")
+                    }
+                    Button(role: .destructive) {
+                        store.deleteFood(entry)
+                    } label: {
+                        Label("Delete", systemImage: "trash")
                     }
                 }
             }

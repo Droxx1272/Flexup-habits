@@ -51,14 +51,14 @@ struct StatsSection: View {
 
     private var pillarTiles: some View {
         VStack(spacing: 10) {
-            HStack(spacing: 10) {
-                TrackStat(value: "\(store.wakeStreak)", label: "Wake streak")
-                TrackStat(value: RunFormat.kilometers(store.totalRunKilometers), label: "KM run")
-            }
-            HStack(spacing: 10) {
-                TrackStat(value: "\(Int(store.totalVolumeKg))", label: "KG lifted")
-                TrackStat(value: "\(store.caloriesToday)/\(store.calorieBudget)", label: "KCAL today")
-            }
+            StatStrip([
+                ("\(store.wakeStreak)", "Wake streak"),
+                (RunFormat.kilometers(store.totalRunKilometers), "KM run")
+            ])
+            StatStrip([
+                ("\(Int(store.totalVolumeKg))", "KG lifted"),
+                ("\(store.caloriesToday)/\(store.calorieBudget)", "KCAL today")
+            ])
         }
     }
 
@@ -99,7 +99,7 @@ struct StatsSection: View {
 
     private var photosSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            SectionHeader(title: "Progress photos", subtitle: "Same pose, same spot. The honest graph.")
+            SectionHeader(title: "Progress photos")
             PhotoSection()
         }
     }
@@ -154,7 +154,7 @@ struct StatsSection: View {
                 FlexCard {
                     VStack(alignment: .leading, spacing: 12) {
                         HStack {
-                            SectionHeader(title: "Body weight", subtitle: "The trend, not any single day.")
+                            SectionHeader(title: "Body weight")
                             Spacer()
                             if let latest = store.latestWeight {
                                 Text(String(format: "%.1f kg", latest.kilograms))
