@@ -29,7 +29,7 @@
    - **App Attest**, with the environment set to **Production**.
    - **Background Modes → Location updates**, so runs keep recording when the screen locks. The code switches this on automatically once the mode is present.
 4. **Deploy the server** (`backend/README.md`):
-   - Set `APPLE_TEAM_ID` and `SUPPORT_EMAIL` in `backend/wrangler.jsonc`, then `npm run deploy`.
+   - Set `APPLE_TEAM_ID` in `backend/wrangler.jsonc` (`SUPPORT_EMAIL` is supportflexup@gmail.com), then `npm run deploy`.
    - Paste the URL into `FlexUp/Support/BackendConfig.swift`.
    - Check that `https://<your-worker>/privacy` opens in a browser.
 5. **Set a spend limit** in the Claude Console.

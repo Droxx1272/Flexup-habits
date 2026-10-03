@@ -23,7 +23,7 @@
     // App Attest capability set to production.
     "ALLOW_DEVELOPMENT_ATTESTATION": "true",
     // Shown on /privacy, /terms and /support. Use an inbox you check.
-    "SUPPORT_EMAIL": ""
+    "SUPPORT_EMAIL": "supportflexup@gmail.com"
   },
 
   // One small record per install (its public key). Created automatically
