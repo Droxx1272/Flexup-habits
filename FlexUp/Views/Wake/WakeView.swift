@@ -35,6 +35,8 @@ struct WakeView: View {
                     case .wake:
                         if store.wake.enabled && !store.isWakeAlarmReal && notificationsDenied {
                             blockedCard
+                        } else if store.wake.enabled, let issue = store.wakeAlarmIssue {
+                            alarmIssueCard(issue)
                         }
                         heroCard
                         WakeCheckInCard()
@@ -86,6 +88,48 @@ struct WakeView: View {
         if wasDenied && !notificationsDenied {
             store.updateWakeSchedule()
             store.updateBedtimeSchedule()
+        } else if store.wakeAlarmIssue == .alarmsDenied {
+            // Alarms may have just been switched on in Settings.
+            store.updateWakeSchedule()
+        }
+    }
+
+    /// iOS 26 could ring a real alarm but can't right now: say why, and
+    /// what the wake-up is doing instead.
+    private func alarmIssueCard(_ issue: WakeAlarmIssue) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 10) {
+                Image(systemName: "alarm.waves.left.and.right")
+                    .foregroundStyle(Theme.amber)
+                Text(issue == .alarmsDenied ? "Alarms are off for FlexUp" : "The alarm couldn't be set")
+                    .font(.flexBodyBold())
+                    .foregroundStyle(Theme.ink)
+            }
+            Text(issueMessage(issue))
+                .font(.flexCaption())
+                .foregroundStyle(Theme.inkSubtle)
+                .fixedSize(horizontal: false, vertical: true)
+            if issue == .alarmsDenied {
+                Button("Open Settings") {
+                    if let url = URL(string: UIApplication.openSettingsURLString) { openURL(url) }
+                }
+                .buttonStyle(SecondaryButtonStyle(tint: Theme.amber, background: Theme.amberSoft))
+            } else {
+                Button("Try again") { store.updateWakeSchedule() }
+                    .buttonStyle(SecondaryButtonStyle())
+            }
+        }
+        .padding(16)
+        .background(Theme.card)
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+    }
+
+    private func issueMessage(_ issue: WakeAlarmIssue) -> String {
+        switch issue {
+        case .alarmsDenied:
+            "Your wake-up is a notification for now, so silent mode will mute it. Turn on Alarms for FlexUp in Settings to make it ring like the Clock app."
+        case .failed(let reason):
+            "iOS said: \(reason) Your wake-up is a notification for now, so keep your phone off silent."
         }
     }
 
@@ -495,6 +539,8 @@ struct WakeSetupSheet: View {
     @State private var days: Set<Int> = [2, 3, 4, 5, 6]
     @State private var enabled = true
     @State private var previewSent = false
+    /// Whether the last test used a real AlarmKit alarm.
+    @State private var previewIsReal = false
     @State private var showSpotCamera = false
     @State private var showSpotLibrary = false
 
@@ -513,9 +559,9 @@ struct WakeSetupSheet: View {
 
     private var alarmCapabilityNote: String {
         if #available(iOS 26.0, *) {
-            "Your wake-up rings at full volume even on silent, like the Clock app. The preview plays the notification sound instead."
+            "Rings at full volume even on silent, like the Clock app. The test rings the real alarm, so you can lock your phone and hear it."
         } else {
-            "Keep your phone off silent. Before iOS 26, only the Clock app can ring through the mute switch."
+            "Keep your phone off silent and the volume up. Before iOS 26, only the Clock app can ring through the mute switch."
         }
     }
 
@@ -574,14 +620,14 @@ struct WakeSetupSheet: View {
 
                 VStack(spacing: 8) {
                     Button {
-                        store.previewWakeAlarm()
                         previewSent = true
-                        Task {
-                            try? await Task.sleep(nanoseconds: 6_000_000_000)
+                        Task { @MainActor in
+                            previewIsReal = await store.previewWakeAlarm()
+                            try? await Task.sleep(nanoseconds: 8_000_000_000)
                             previewSent = false
                         }
                     } label: {
-                        Label(previewSent ? "Listen. Arrives in 5 seconds" : "Preview the alarm", systemImage: "speaker.wave.3")
+                        Label(previewSent ? (previewIsReal ? "Ringing in 5 seconds. Lock your phone." : "Sounding in 5 seconds") : "Test the alarm now", systemImage: "speaker.wave.3")
                     }
                     .buttonStyle(SecondaryButtonStyle())
                     .disabled(previewSent)

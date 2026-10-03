@@ -87,6 +87,8 @@ struct PrivacyDataView: View {
     @State private var deleteError: String?
     /// Fresh export file, written when the screen opens.
     @State private var exportURL: URL?
+    private let lockLabel = DeviceLock.label
+    private let lockAvailable = DeviceLock.isAvailable
 
     var body: some View {
         ScrollView {
@@ -101,6 +103,23 @@ struct PrivacyDataView: View {
                             .font(.flexCaption())
                             .foregroundStyle(Theme.ink)
                     }
+                }
+
+                VStack(alignment: .leading, spacing: 8) {
+                    SectionHeader(title: "App lock", subtitle: lockAvailable ? nil : "Set a passcode on your iPhone to lock FlexUp.")
+                    Toggle(isOn: Binding(
+                        get: { store.vaultLock },
+                        set: { store.setVaultLock($0) }
+                    )) {
+                        Label("Lock with \(lockLabel)", systemImage: "lock.shield")
+                            .font(.flexBody())
+                            .foregroundStyle(Theme.ink)
+                    }
+                    .tint(Theme.accent)
+                    .disabled(!lockAvailable)
+                    .padding(14)
+                    .background(Theme.card)
+                    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
                 }
 
                 VStack(alignment: .leading, spacing: 8) {

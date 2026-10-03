@@ -2,6 +2,10 @@ import SwiftUI
 
 struct RootView: View {
     @Environment(AppStore.self) private var store
+    @Environment(\.scenePhase) private var scenePhase
+    /// The vault door covers everything at launch, and again whenever the
+    /// app goes to the background with the lock on.
+    @State private var vaultShown = true
 
     var body: some View {
         Group {
@@ -22,6 +26,20 @@ struct RootView: View {
                     .transition(.opacity)
             }
         }
+        .overlay {
+            if vaultShown {
+                VaultView(requiresUnlock: store.vaultLock && store.isSignedIn) {
+                    vaultShown = false
+                }
+                .transition(.identity)
+            }
+        }
+        .onChange(of: scenePhase) { _, phase in
+            // Only on background: Face ID itself briefly makes the app inactive.
+            if phase == .background && store.vaultLock && store.isSignedIn {
+                vaultShown = true
+            }
+        }
         .animation(.spring(duration: 0.35), value: store.celebration != nil)
         .animation(.easeInOut(duration: 0.35), value: store.hasSeenIntro)
     }
@@ -32,6 +50,7 @@ struct RootView: View {
 /// for later — the nav stays simple.
 struct MainTabView: View {
     @Environment(AppStore.self) private var store
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
         TabView {
@@ -47,6 +66,12 @@ struct MainTabView: View {
                 .tabItem { Label("Today", systemImage: "checklist") }
         }
         .tint(Theme.accent)
+        // Every time the app comes forward, make sure the wake-up that's
+        // switched on is really scheduled.
+        .onAppear { store.verifyWakeSchedule() }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active { store.verifyWakeSchedule() }
+        }
         // Keeps the header's chat / bell counts current while the app is open.
         .task(id: store.community.isSignedIn) {
             while FeatureFlags.community && store.community.isSignedIn && !Task.isCancelled {

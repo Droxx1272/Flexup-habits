@@ -256,6 +256,14 @@ struct WakeConfig: Codable, Hashable {
     }
 }
 
+/// Why the wake-up fell back to notifications when it could be a real alarm.
+enum WakeAlarmIssue: Equatable {
+    /// Alarms are turned off for FlexUp in Settings (iOS 26+).
+    case alarmsDenied
+    /// AlarmKit refused to schedule; the system's reason.
+    case failed(String)
+}
+
 // MARK: - Sleep (nights)
 
 struct BedtimeConfig: Codable, Hashable {

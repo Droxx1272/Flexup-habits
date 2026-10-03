@@ -256,6 +256,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_NSAlarmKitUsageDescription = "FlexUp schedules your wake-up so it rings like a real alarm, even when your phone is on silent.";
 				INFOPLIST_KEY_NSCameraUsageDescription = "FlexUp uses the camera for progress photos and photo-verified check-ins. Photos stay on your device.";
+				INFOPLIST_KEY_NSFaceIDUsageDescription = "FlexUp uses Face ID to unlock the app when you turn on App lock in Privacy and data.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "FlexUp uses the microphone so you can speak corrections to a meal estimate instead of typing them.";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "FlexUp turns your spoken meal corrections into text so the calorie estimate can account for them.";
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
@@ -292,6 +293,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_NSAlarmKitUsageDescription = "FlexUp schedules your wake-up so it rings like a real alarm, even when your phone is on silent.";
 				INFOPLIST_KEY_NSCameraUsageDescription = "FlexUp uses the camera for progress photos and photo-verified check-ins. Photos stay on your device.";
+				INFOPLIST_KEY_NSFaceIDUsageDescription = "FlexUp uses Face ID to unlock the app when you turn on App lock in Privacy and data.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "FlexUp uses the microphone so you can speak corrections to a meal estimate instead of typing them.";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "FlexUp turns your spoken meal corrections into text so the calorie estimate can account for them.";
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;

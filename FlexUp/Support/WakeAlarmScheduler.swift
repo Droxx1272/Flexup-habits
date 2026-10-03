@@ -9,8 +9,14 @@ enum WakeAlarmResult {
     /// AlarmKit owns the wake-up; the notification burst must stay off so
     /// the morning doesn't fire twice.
     case scheduled(UUID)
-    /// Pre-iOS 26, or permission denied — fall back to notifications.
+    /// Pre-iOS 26: fall back to notifications.
     case unavailable
+    /// iOS 26, but alarms are turned off for FlexUp in Settings. Falls back
+    /// to notifications, and the app must say so.
+    case denied
+    /// AlarmKit refused the schedule. Falls back to notifications; the
+    /// reason is shown so it isn't a silent failure.
+    case failed(String)
     /// The wake-up is switched off; nothing should fire at all.
     case disabled
 }
@@ -52,22 +58,9 @@ enum WakeAlarmScheduler {
         }
 
         guard enabled, !weekdays.isEmpty else { return .disabled }
-        guard await requestAuthorization() else { return .unavailable }
+        guard await requestAuthorization() else { return .denied }
 
-        let alert = AlarmPresentation.Alert(
-            title: "Wake up. You said so.",
-            stopButton: AlarmButton(
-                text: "I'm up",
-                textColor: .white,
-                systemImageName: "checkmark"
-            )
-        )
-
-        let attributes = AlarmAttributes(
-            presentation: AlarmPresentation(alert: alert),
-            metadata: Metadata(),
-            tintColor: tint
-        )
+        let attributes = makeAttributes(title: "Wake up. You said so.", tint: tint)
 
         let schedule = Alarm.Schedule.relative(
             .init(
@@ -89,12 +82,69 @@ enum WakeAlarmScheduler {
             _ = try await AlarmManager.shared.schedule(id: id, configuration: configuration)
             return .scheduled(id)
         } catch {
-            return .unavailable
+            return .failed(error.localizedDescription)
         }
         #else
         return .unavailable
         #endif
     }
+
+    /// A one-off real alarm a few seconds from now, so "Preview" rings
+    /// exactly like the morning will (through silent mode) instead of
+    /// playing a notification. Doesn't touch the scheduled wake-up.
+    static func ringTest(after seconds: TimeInterval, tint: Color) async -> WakeAlarmResult {
+        #if canImport(AlarmKit)
+        guard #available(iOS 26.0, *) else { return .unavailable }
+        guard await requestAuthorization() else { return .denied }
+        let configuration = AlarmManager.AlarmConfiguration(
+            countdownDuration: nil,
+            schedule: .fixed(Date.now.addingTimeInterval(seconds)),
+            attributes: makeAttributes(title: "Test alarm. This is your wake-up.", tint: tint),
+            stopIntent: nil,
+            secondaryIntent: nil
+        )
+        let id = UUID()
+        do {
+            _ = try await AlarmManager.shared.schedule(id: id, configuration: configuration)
+            return .scheduled(id)
+        } catch {
+            return .failed(error.localizedDescription)
+        }
+        #else
+        return .unavailable
+        #endif
+    }
+
+    /// Whether AlarmKit still holds this alarm. Reinstalls, restores and
+    /// permission changes can drop it without telling the app.
+    static func isScheduled(id: UUID) -> Bool {
+        #if canImport(AlarmKit)
+        guard #available(iOS 26.0, *) else { return false }
+        let alarms = (try? AlarmManager.shared.alarms) ?? []
+        return alarms.contains { $0.id == id }
+        #else
+        return false
+        #endif
+    }
+
+    #if canImport(AlarmKit)
+    @available(iOS 26.0, *)
+    private static func makeAttributes(title: LocalizedStringResource, tint: Color) -> AlarmAttributes<Metadata> {
+        let alert = AlarmPresentation.Alert(
+            title: title,
+            stopButton: AlarmButton(
+                text: "I'm up",
+                textColor: .white,
+                systemImageName: "checkmark"
+            )
+        )
+        return AlarmAttributes(
+            presentation: AlarmPresentation(alert: alert),
+            metadata: Metadata(),
+            tintColor: tint
+        )
+    }
+    #endif
 
     /// Cancel the scheduled alarm, e.g. when the wake-up is switched off.
     static func cancel(id: UUID?) {

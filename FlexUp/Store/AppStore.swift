@@ -31,9 +31,14 @@ final class AppStore {
     var waterByDay: [String: Int] = [:]
     /// The paged introduction runs once, before sign-in.
     var hasSeenIntro = false
+    /// Why the wake-up isn't a real alarm right now, when that's fixable.
+    /// Not persisted: it's recomputed on every schedule.
+    var wakeAlarmIssue: WakeAlarmIssue?
     /// Who used this phone last. Kept after logging out so a different
     /// account can be asked before seeing their logs.
     var lastAccountID: String?
+    /// Keep the vault door shut until Face ID / passcode opens it.
+    var vaultLock = false
     /// Which pillars friends see in their feed.
     var sharing = SharingSettings()
     /// Outcomes and weekly targets, asked right after sign-up.
@@ -131,6 +136,7 @@ final class AppStore {
         profile = nil
         account = nil
         lastAccountID = nil
+        vaultLock = false
         habits = []
         commitments = []
         runs = []
@@ -222,6 +228,11 @@ final class AppStore {
         let today = dayKey()
         aiEstimatesByDay = aiEstimatesByDay.filter { $0.key == today }
         aiEstimatesByDay[today] = usedUp ? Self.dailyAIEstimateLimit : (aiEstimatesByDay[today] ?? 0) + 1
+        save()
+    }
+
+    func setVaultLock(_ on: Bool) {
+        vaultLock = on
         save()
     }
 
@@ -1196,15 +1207,46 @@ final class AppStore {
             switch result {
             case .scheduled(let id):
                 self.wake.alarmID = id
+                self.wakeAlarmIssue = nil
                 self.save()
             case .disabled:
                 self.wake.alarmID = nil
+                self.wakeAlarmIssue = nil
                 self.save()
             case .unavailable:
                 self.wake.alarmID = nil
+                self.wakeAlarmIssue = nil
+                self.save()
+                self.scheduleWakeNotifications()
+            case .denied:
+                self.wake.alarmID = nil
+                self.wakeAlarmIssue = .alarmsDenied
+                self.save()
+                self.scheduleWakeNotifications()
+            case .failed(let reason):
+                self.wake.alarmID = nil
+                self.wakeAlarmIssue = .failed(reason)
                 self.save()
                 self.scheduleWakeNotifications()
             }
+        }
+    }
+
+    /// Called whenever the app comes to the front: makes sure the wake-up
+    /// that's switched on is actually scheduled. AlarmKit alarms and
+    /// pending notifications can vanish (reinstall, restore, permission
+    /// changes) without the app hearing about it.
+    func verifyWakeSchedule() {
+        guard wake.enabled, !wake.days.isEmpty else { return }
+        if let id = wake.alarmID {
+            if !WakeAlarmScheduler.isScheduled(id: id) { updateWakeSchedule() }
+            return
+        }
+        let identifiers = Set(wakeNotificationIdentifiers)
+        UNUserNotificationCenter.current().getPendingNotificationRequests { [weak self] pending in
+            let scheduled = pending.contains { identifiers.contains($0.identifier) }
+            guard !scheduled else { return }
+            Task { @MainActor in self?.updateWakeSchedule() }
         }
     }
 
@@ -1229,7 +1271,7 @@ final class AppStore {
                     let content = UNMutableNotificationContent()
                     content.title = copy.title
                     content.body = copy.body
-                    content.sound = .default
+                    content.sound = Self.alarmSound
                     // Time Sensitive breaks through Focus modes (but never the
                     // ring/silent switch — only AlarmKit or critical alerts can).
                     content.interruptionLevel = .timeSensitive
@@ -1254,25 +1296,42 @@ final class AppStore {
         updateWakeSchedule()
     }
 
-    /// Fire one alarm-style notification shortly, so the wake-up can be
-    /// heard and verified without waiting for the morning.
-    func previewWakeAlarm() {
-        let center = UNUserNotificationCenter.current()
-        center.requestAuthorization(options: [.alert, .sound, .badge]) { granted, _ in
-            guard granted else { return }
-            let content = UNMutableNotificationContent()
-            content.title = "Wake up. You said so."
-            content.body = "This is what your morning will sound like."
-            content.sound = .default
-            content.interruptionLevel = .timeSensitive
-
-            center.add(UNNotificationRequest(
-                identifier: "wake-preview",
-                content: content,
-                trigger: UNTimeIntervalNotificationTrigger(timeInterval: 5, repeats: false)
-            ))
+    /// Ring the wake-up a few seconds from now so it can be heard and
+    /// trusted before the morning. On iOS 26 that's a real AlarmKit alarm
+    /// (rings on silent, like the real one); otherwise the same
+    /// notification the fallback uses. Returns true for a real alarm.
+    @MainActor
+    func previewWakeAlarm() async -> Bool {
+        let result = await WakeAlarmScheduler.ringTest(after: 5, tint: Theme.accent)
+        switch result {
+        case .scheduled:
+            return true
+        case .denied:
+            wakeAlarmIssue = .alarmsDenied
+        case .failed(let reason):
+            wakeAlarmIssue = .failed(reason)
+        case .unavailable, .disabled:
+            break
         }
+        let center = UNUserNotificationCenter.current()
+        guard (try? await center.requestAuthorization(options: [.alert, .sound, .badge])) == true else { return false }
+        let content = UNMutableNotificationContent()
+        content.title = "Wake up. You said so."
+        content.body = "This is what your morning will sound like."
+        content.sound = Self.alarmSound
+        content.interruptionLevel = .timeSensitive
+        try? await center.add(UNNotificationRequest(
+            identifier: "wake-preview",
+            content: content,
+            trigger: UNTimeIntervalNotificationTrigger(timeInterval: 5, repeats: false)
+        ))
+        return false
     }
+
+    /// A 28-second alarm tone (bundled; iOS allows up to 30 s), so the
+    /// notification fallback sounds like an alarm rather than a ding.
+    /// Silent mode still mutes it: only AlarmKit can ring through that.
+    static let alarmSound = UNNotificationSound(named: UNNotificationSoundName("flexup-alarm.wav"))
 
     // MARK: - Sleep
 
@@ -1923,6 +1982,7 @@ final class AppStore {
         var reminders: ReminderPreferences?
         var aiPhotoConsent: Bool?
         var lastAccountID: String?
+        var vaultLock: Bool?
         var aiEstimatesByDay: [String: Int]?
         var moodByDay: [String: String]
         var chats: [UUID: [ChatMessage]]
@@ -2030,6 +2090,7 @@ final class AppStore {
             reminders: reminders,
             aiPhotoConsent: aiPhotoConsent,
             lastAccountID: lastAccountID,
+            vaultLock: vaultLock,
             aiEstimatesByDay: aiEstimatesByDay,
             moodByDay: moodByDay,
             chats: chats
@@ -2078,6 +2139,7 @@ final class AppStore {
         aiPhotoConsent = snapshot.aiPhotoConsent
         // Older saves didn't record it; the signed-in account is the owner.
         lastAccountID = snapshot.lastAccountID ?? snapshot.account?.userID
+        vaultLock = snapshot.vaultLock ?? false
         aiEstimatesByDay = snapshot.aiEstimatesByDay ?? [:]
         cuisineContext = snapshot.cuisineContext ?? ""
         wake = snapshot.wake ?? WakeConfig()
