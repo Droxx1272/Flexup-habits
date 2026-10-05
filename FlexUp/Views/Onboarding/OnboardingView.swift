@@ -22,6 +22,8 @@ struct OnboardingView: View {
 
     // Goals & preferences
     @State private var goalFocuses: Set<GoalFocus> = []
+    /// The intro already asked for goals; don't ask twice.
+    @State private var skipGoals = false
     @State private var runsPerWeek = 2
     @State private var gymPerWeek = 3
     @State private var dietDirection: DietDirection = .maintain
@@ -133,6 +135,13 @@ struct OnboardingView: View {
             if name.isEmpty {
                 name = store.account?.name ?? ""
             }
+            // Start from what the intro collected.
+            if !store.goals.focuses.isEmpty && goalFocuses.isEmpty {
+                goalFocuses = Set(store.goals.focuses)
+                skipGoals = true
+            }
+            runsPerWeek = store.goals.runsPerWeek
+            gymPerWeek = store.goals.gymPerWeek
         }
         .fullScreenCover(isPresented: $showCamera) {
             CameraPicker { image in avatarImage = image }
@@ -173,10 +182,9 @@ struct OnboardingView: View {
         .padding(.top, 14)
     }
 
-    /// Every step, in order. (Kept as a list so a step can be made
-    /// conditional again without touching navigation.)
+    /// Every step, in order, minus goals when the intro already asked.
     private var activeSteps: [Step] {
-        Step.allCases
+        Step.allCases.filter { $0 != .goals || !skipGoals }
     }
 
     private var progressFraction: CGFloat {
