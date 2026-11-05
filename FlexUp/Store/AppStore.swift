@@ -21,6 +21,10 @@ final class AppStore {
     var runs: [Run] = []
     var workouts: [Workout] = []
     var routines: [Routine] = []
+    /// Territory: every map block a GPS run has passed through (`TerritoryGrid`).
+    var territory: Set<String> = []
+    /// Zombie Escape missions played, so the story moves on each run.
+    var zombieMissionsPlayed = 0
     /// The workout in progress, if any. Survives the app closing.
     var workoutDraft: WorkoutDraft?
     var weightEntries: [WeightEntry] = []
@@ -142,6 +146,8 @@ final class AppStore {
         runs = []
         workouts = []
         routines = []
+        territory = []
+        zombieMissionsPlayed = 0
         workoutDraft = nil
         weightEntries = []
         foodEntries = []
@@ -644,21 +650,40 @@ final class AppStore {
         duration: TimeInterval,
         route: [RoutePoint] = [],
         splitsSeconds: [Double] = [],
-        elevationGainM: Double = 0
+        elevationGainM: Double = 0,
+        game: RunGameResult? = nil
     ) {
+        // Every GPS run claims territory, game or not.
+        let claimed = TerritoryGrid.cells(along: route.map(\.coordinate))
+        let newBlocks = claimed.subtracting(territory).count
+        territory.formUnion(claimed)
+
+        var game = game
+        if game?.kind == .territory {
+            game?.newBlocks = newBlocks
+            game?.headline = "\(newBlocks) new blocks · \(territory.count) owned"
+            game?.won = newBlocks > 0
+        }
+        if game?.kind == .zombies { zombieMissionsPlayed += 1 }
+
         let run = Run(
             date: .now,
             distanceMeters: distanceMeters,
             duration: duration,
             route: route,
             splitsSeconds: splitsSeconds,
-            elevationGainM: elevationGainM
+            elevationGainM: elevationGainM,
+            game: game
         )
         runs.insert(run, at: 0)
 
         var unlocked: [Achievement] = []
         if let a = unlock("first_run") { unlocked.append(a) }
         if run.kilometers >= 5, let a = unlock("five_k") { unlocked.append(a) }
+        if (game?.chasesEscaped ?? 0) > 0, let a = unlock("horde_escaped") { unlocked.append(a) }
+        if game?.kind == .ghost, game?.won == true, let a = unlock("ghost_beaten") { unlocked.append(a) }
+        if game?.kind == .checkpoints, game?.won == true, let a = unlock("all_checkpoints") { unlocked.append(a) }
+        if territory.count >= 100, let a = unlock("territory_100") { unlocked.append(a) }
 
         if run.kilometers >= 0.1 {
             shareWithFriends(
@@ -679,13 +704,40 @@ final class AppStore {
                 ? String(format: "%.2f km on your legs, not on your list.", run.kilometers)
                 : "Time on your feet counts."
             celebration = Celebration(
-                title: "Run logged.",
-                message: distanceLine,
+                title: game.map { $0.won ? "\($0.kind.title): won." : "\($0.kind.title) logged." } ?? "Run logged.",
+                message: game.map { "\($0.headline). \(distanceLine)" } ?? distanceLine,
                 streak: nil,
                 achievement: unlocked.first
             )
         }
         save()
+    }
+
+    // MARK: - Running games
+
+    /// Past runs worth racing in Ghost Race, newest first.
+    var ghostCandidates: [Run] {
+        Array(runs.filter { $0.distanceMeters >= 400 && $0.duration > 60 }.prefix(12))
+    }
+
+    /// One line per game for its card: what you've done so far.
+    func gameStat(_ kind: RunGameKind) -> String {
+        let played = runs.compactMap(\.game).filter { $0.kind == kind }
+        switch kind {
+        case .free:
+            return "\(runs.count) runs"
+        case .zombies:
+            let escaped = played.reduce(0) { $0 + ($1.chasesEscaped ?? 0) }
+            return played.isEmpty ? "8 story missions" : "\(escaped) hordes escaped · mission \(zombieMissionsPlayed % ZombieEscape.missions.count + 1) next"
+        case .ghost:
+            let wins = played.filter(\.won).count
+            return played.isEmpty ? (ghostCandidates.isEmpty ? "Needs one finished run first" : "\(ghostCandidates.count) runs to race") : "\(wins) of \(played.count) races won"
+        case .territory:
+            return territory.isEmpty ? "Every GPS run claims blocks" : "\(territory.count) blocks owned"
+        case .checkpoints:
+            let found = played.reduce(0) { $0 + ($1.checkpointsFound ?? 0) }
+            return played.isEmpty ? "3 to 5 checkpoints a hunt" : "\(found) checkpoints found"
+        }
     }
 
     func deleteRun(_ run: Run) {
@@ -1963,6 +2015,8 @@ final class AppStore {
         var runs: [Run]?
         var workouts: [Workout]?
         var routines: [Routine]?
+        var territory: [String]?
+        var zombieMissionsPlayed: Int?
         var workoutDraft: WorkoutDraft?
         var weightEntries: [WeightEntry]?
         var foodEntries: [FoodEntry]?
@@ -2071,6 +2125,8 @@ final class AppStore {
             runs: runs,
             workouts: workouts,
             routines: routines,
+            territory: Array(territory),
+            zombieMissionsPlayed: zombieMissionsPlayed,
             workoutDraft: workoutDraft,
             weightEntries: weightEntries,
             foodEntries: foodEntries,
@@ -2125,6 +2181,15 @@ final class AppStore {
         runs = snapshot.runs ?? []
         workouts = snapshot.workouts ?? []
         routines = snapshot.routines ?? []
+        zombieMissionsPlayed = snapshot.zombieMissionsPlayed ?? 0
+        if let saved = snapshot.territory {
+            territory = Set(saved)
+        } else {
+            // First launch with Territory: claim the blocks of every run so far.
+            territory = runs.reduce(into: Set<String>()) { cells, run in
+                cells.formUnion(TerritoryGrid.cells(along: run.coordinates))
+            }
+        }
         workoutDraft = snapshot.workoutDraft
         weightEntries = snapshot.weightEntries ?? []
         foodEntries = snapshot.foodEntries ?? []

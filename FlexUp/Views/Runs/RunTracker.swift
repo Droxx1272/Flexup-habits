@@ -19,6 +19,11 @@ final class RunTracker: NSObject, CLLocationManagerDelegate {
     var routeCoordinates: [CLLocationCoordinate2D] = []
     var locationDenied = false
 
+    /// Elapsed seconds for each point in `routeCoordinates`.
+    @ObservationIgnored private var routeTimes: [Double] = []
+    /// Called every second and on every accepted GPS fix (with the fix),
+    /// so a running game can react. Set before `start()`.
+    @ObservationIgnored var onUpdate: ((RunTracker, CLLocation?) -> Void)?
     @ObservationIgnored private var splitTimes: [Double] = []
     @ObservationIgnored private var lastAltitude: Double?
 
@@ -54,6 +59,7 @@ final class RunTracker: NSObject, CLLocationManagerDelegate {
         distanceMeters = 0
         elevationGain = 0
         routeCoordinates = []
+        routeTimes = []
         splitTimes = []
         lastAltitude = nil
         lastLocation = nil
@@ -112,12 +118,13 @@ final class RunTracker: NSObject, CLLocationManagerDelegate {
         let result = RunResult(
             distanceMeters: distanceMeters,
             duration: elapsed,
-            route: routeCoordinates.map { RoutePoint(lat: $0.latitude, lon: $0.longitude) },
+            route: zip(routeCoordinates, routeTimes).map { RoutePoint(lat: $0.0.latitude, lon: $0.0.longitude, t: $0.1) },
             splitsSeconds: splitTimes,
             elevationGainM: elevationGain
         )
         lastLocation = nil
         lastAltitude = nil
+        onUpdate = nil
         phase = .idle
         return result
     }
@@ -135,7 +142,9 @@ final class RunTracker: NSObject, CLLocationManagerDelegate {
     private func startTimer() {
         timer?.invalidate()
         timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
-            self?.refreshElapsed()
+            guard let self else { return }
+            self.refreshElapsed()
+            self.onUpdate?(self, nil)
         }
     }
 
@@ -153,13 +162,18 @@ final class RunTracker: NSObject, CLLocationManagerDelegate {
                 // Ignore sub-metre jitter and impossible jumps.
                 if delta >= 1 && delta <= 100 {
                     distanceMeters += delta
+                    refreshElapsed()
                     routeCoordinates.append(location.coordinate)
+                    routeTimes.append(elapsed)
                     recordSplitsIfNeeded()
                 }
             } else {
+                refreshElapsed()
                 routeCoordinates.append(location.coordinate)
+                routeTimes.append(elapsed)
             }
             lastLocation = location
+            onUpdate?(self, location)
 
             // Elevation gain from barometer/GPS altitude when it's trustworthy.
             if location.verticalAccuracy >= 0 && location.verticalAccuracy <= 20 {

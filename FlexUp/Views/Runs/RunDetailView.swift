@@ -13,6 +13,9 @@ struct RunDetailView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 header
+                if let game = run.game {
+                    GameResultCard(result: game)
+                }
                 routeMap
                 statsGrid
                 splitsSection

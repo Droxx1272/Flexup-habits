@@ -196,6 +196,9 @@ struct ChatMessage: Identifiable, Codable, Hashable {
 struct RoutePoint: Codable, Hashable {
     var lat: Double
     var lon: Double
+    /// Seconds since the run started. Optional: runs recorded before the
+    /// running games don't have it (Ghost Race falls back to splits).
+    var t: Double?
 
     var coordinate: CLLocationCoordinate2D {
         CLLocationCoordinate2D(latitude: lat, longitude: lon)
@@ -211,6 +214,8 @@ struct Run: Identifiable, Codable, Hashable {
     var route: [RoutePoint]?
     var splitsSeconds: [Double]?
     var elevationGainM: Double?
+    /// Set when the run was played as one of the running games.
+    var game: RunGameResult?
 
     var kilometers: Double { distanceMeters / 1000 }
 
@@ -229,6 +234,65 @@ struct Run: Identifiable, Codable, Hashable {
     var finalPartialMeters: Double {
         distanceMeters - Double(splits.count) * 1000
     }
+}
+
+// MARK: - Running games
+
+/// The ways to play a run. A plain run is `.free`.
+enum RunGameKind: String, Codable, CaseIterable, Identifiable {
+    case free, zombies, ghost, territory, checkpoints
+
+    var id: String { rawValue }
+
+    static var games: [RunGameKind] { [.zombies, .ghost, .territory, .checkpoints] }
+
+    var title: String {
+        switch self {
+        case .free: "Run"
+        case .zombies: "Zombie Escape"
+        case .ghost: "Ghost Race"
+        case .territory: "Territory"
+        case .checkpoints: "Checkpoint Hunt"
+        }
+    }
+
+    var tagline: String {
+        switch self {
+        case .free: "Just run."
+        case .zombies: "Collect supplies. Outrun the horde."
+        case .ghost: "Race one of your own past runs."
+        case .territory: "Claim every block you run through."
+        case .checkpoints: "Find the checkpoints dropped around you."
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .free: "figure.run"
+        case .zombies: "figure.run.circle.fill"
+        case .ghost: "person.2.wave.2.fill"
+        case .territory: "square.grid.3x3.fill"
+        case .checkpoints: "mappin.and.ellipse"
+        }
+    }
+}
+
+/// How a game run went, saved on the run itself.
+struct RunGameResult: Codable, Hashable {
+    var kind: RunGameKind
+    /// One line for history and the celebration ("Escaped 3 of 4 hordes").
+    var headline: String
+    /// Ghost beaten, every checkpoint found, no horde caught you.
+    var won: Bool
+    var mission: Int?
+    var supplies: Int?
+    var chasesEscaped: Int?
+    var chasesCaught: Int?
+    /// Seconds ahead of the ghost at its finish line (negative = behind).
+    var ghostMarginSeconds: Double?
+    var newBlocks: Int?
+    var checkpointsFound: Int?
+    var checkpointsTotal: Int?
 }
 
 // MARK: - Wake (mornings)
