@@ -6,6 +6,7 @@ FlexUp is a SwiftUI iOS app (iOS 17+, Xcode 16 folder-synchronized project, zero
 
 - Open/build with Xcode 16+: `xcodebuild -project FlexUp.xcodeproj -scheme FlexUp -destination 'platform=iOS Simulator,name=iPhone 16' build`
 - There are no tests yet. At minimum, make sure the project compiles before committing.
+- No Xcode in a cloud session? `tools/ios-typecheck/typecheck.sh` type-checks the whole app on Linux against stand-in Apple frameworks (see its README for the toolchain download). Add missing APIs to `tools/ios-typecheck/Stubs/` with Apple's real signatures.
 - New Swift files are picked up automatically (PBXFileSystemSynchronizedRootGroup) — just create them under `FlexUp/`; never hand-edit `project.pbxproj` to register files.
 
 ## Git conventions
